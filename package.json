@@ -1,11 +1,15 @@
 {
   "name": "molijv",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Mongoose-Like JSON Schema Validator",
   "main": "molijv.js",
   "type": "module",
   "scripts": {
     "test": "NODE_OPTIONS=--experimental-vm-modules jest tests"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/webarthur/molijv.git"
   },
   "keywords": [
     "JSON",
