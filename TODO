@@ -1,0 +1,12 @@
+# TODO
+
+- README
+- npm
+- github
+
+- Improve required check for empty array and object
+- Types as string
+- Rethink min/max for strings
+- Security: prototype pollution
+- Create project dist
+- Create a project website

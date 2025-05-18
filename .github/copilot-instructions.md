@@ -1,0 +1,4 @@
+- JavaScript: add a line break before else, catch, and finally
+- JavaScript: never add a semicolon at the end of a line
+- JavaScript: use let instead of var
+- Tests: Tests are performed in NodeJS with the jest module
