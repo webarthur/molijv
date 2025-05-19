@@ -1,6 +1,6 @@
 // MoliJV - Mongoose Like JSON Validator
 
-import normalizeSchema from './lib/normalize.js'
+import normalizeSchema from './src/normalize.js'
 
 const { isArray } = Array
 
