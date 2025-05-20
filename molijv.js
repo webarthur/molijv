@@ -30,120 +30,185 @@ class Schema {
 
   // Validate input data against schema
   validate(data) {
-    return this._validatorFn(data)
+    return this._validatorFn(this._normalizedSchema, data)
   }
 
-  // Compile schema into a fast validator function
   _compileValidator(schema) {
     const options = this.options
-    // Recursively build validator for schema
-    function build(schema, path = '', isRoot = false) {
-      // Handle array schema
-      if (isArray(schema)) {
-        // Precompile item validator
-        const itemValidator = build(schema[0], path + '[i]')
-        const requiredFlag = schema[0]?.required?.flag
-        const requiredMsg = schema[0]?.required?.msg || schema[0]?.message || `Field "${path}" is required`
-        return (val) => {
-          // Required check for array
-          if ((val === undefined || val === null || val === '') && requiredFlag)
-            throw new Error(requiredMsg)
+    const validators = []
+    
+    function build(schema, path = '', validators, isSchemaArray = false) {
+      const schemaPath = path ? `schema.${path}` : 'schema'
+      const dataPath = path ? `data.${path}` : 'data'
 
-          if (val === undefined || val === null || val === '') return val
-
-          if (!isArray(val)) throw new Error(`Field "${path}" must be an array`)
-
-          let changed = false
-          // Fast for loop for array validation
-          const len = val.length
-          const arr = new Array(len)
-          for (let i = 0; i < len; ++i) {
-            const v = val[i]
-            const res = itemValidator(v)
-            if (res !== v) changed = true
-            arr[i] = res
-          }
-          return changed ? arr : val
-        }
-      }
-
-      // Handle object schema (no .type)
-      if (typeof schema === 'object' && schema !== null && schema.type === undefined) {
-        // Precompile field validators
-        const fieldValidators = {}
-        for (const key in schema) {
-          fieldValidators[key] = build(schema[key], path ? `${path}.${key}` : key)
-        }
-        return obj => {
-          // Ensure input is object
-          if (typeof obj !== 'object' || obj === null) obj = {}
-
-          if (options.coerce === false) {
-            // Only validate, do not coerce or mutate
-            for (const key in fieldValidators) {
-              fieldValidators[key](obj[key])
+      if (typeof schema === 'object' && schema !== null) {
+        // Handle array schema
+        if (isArray(schema)) {
+          // Assume single schema for all items
+          const itemSchema = schema[0]
+          validators.push(`
+            // Array validation for path: ${path}
+            let arr = ${dataPath.replaceAll('.', '?.')}
+            if (arr !== undefined) {
+              if (!Array.isArray(arr)) {
+                throw new Error('Field "${path}" must be an array')
+              }
+              for (let i = 0; i < arr.length; i++) {
+                let item = arr[i]
+                let itemOut = {}
+                ${(() => {
+                  const itemValidators = []
+                  build(itemSchema, path, itemValidators, true)
+                  return '{\n' + itemValidators.join('\n}\n\n{') + '\n}'
+                })()}
+              }
             }
-            return obj
-          }
-
-          // Coerce: create new object if not root
-          const out = isRoot ? obj : {}
-          for (const key in fieldValidators) {
-            const val = obj[key]
-            const res = fieldValidators[key](val)
-            if (!isRoot) {
-              out[key] = res
-            } else if (res !== val) {
-              obj[key] = res
+          `)
+          return
+        }
+        // Handle nested object schema
+        else {
+          schema.any = true
+          for (const key in schema) {
+            if (key === 'default') continue
+            const fieldSchema = schema[key]
+            if (typeof fieldSchema === 'object' && fieldSchema !== null) {
+              build(fieldSchema, path ? `${path}.${key}` : key, validators)
+              schema.any = false
             }
           }
-          return isRoot ? obj : out
+          if(!schema.type)
+            return
         }
       }
 
-      // Handle primitive field schema
-      const defaultVal = schema.default
-      const enumMsg = schema.enum?.msg || schema.message
-      const matchMsg = schema.match?.msg || schema.message
-      const validateMsg = schema.validate?.message || schema.message
-      return val => {
-        // Apply default if value is undefined
-        if (val === undefined && defaultVal !== undefined) {
-          val = typeof defaultVal === 'function' ? defaultVal() : defaultVal
-        }
-
-        // Type validation and coercion
-        const typeValidator = schema.typeValidator
-        if (typeValidator) {
-          const newVal = typeValidator(schema, val, path)
-          if (schema.coerce !== false && newVal !== val) val = newVal
-        }
-
-        // Enum validation (O(1) lookup)
-        const enumSet = schema.enum?.values ? new Set(schema.enum.values) : undefined
-        if (enumSet && !enumSet.has(val)) {
-          throw new Error(enumMsg || `Field "${path}" must be one of: ${[...enumSet].join(', ')}`)
-        }
-
-        // Pattern match validation
-        const matchVal = schema.match?.value instanceof RegExp ? schema.match.value : (schema.match?.value ? new RegExp(schema.match.value) : undefined)
-
-        if (matchVal && !matchVal.test(val)) {
-          throw new Error(matchMsg || `Field "${path}" does not match required pattern`)
-        }
-
-        // Custom validator function
-        const customValidator = schema.validate?.validator
-        if (customValidator && !customValidator(val)) {
-          throw new Error(validateMsg || `Field "${path}" failed custom validation`)
-        }
-
-        return val
-      }
+      // Primitive or object field validation
+      validators.push(`
+        // Handle primitive field schema
+        const _schema = ${schemaPath}${isSchemaArray ? '[0]' : ''}
+        const path = '${path}'
+        let val = ${isSchemaArray ? 'item' : dataPath.replaceAll('.', '?.') }
+        ${ // Type validation and coercion
+        schema.typeValidator ? `
+          const newVal = _schema.typeValidator(_schema, val, path)
+          if (_schema.coerce !== false && newVal !== val) val = newVal
+        ` : ''}
+        ${ // Apply default if value is undefined
+        schema.default !== undefined && schema.coerce ? `
+          const defaultVal = _schema.default
+          if (val === undefined) {
+            out['${path}${isSchemaArray ? '[\' + i + \']' : ''}'] = typeof defaultVal === 'function' ? defaultVal() : defaultVal
+          } else {
+        ` : ''}
+        ${ // Enum validation
+        schema.enum?.values ? `
+          const enumMsg = _schema.enum?.msg || _schema.message
+          const enumSet = new Set(_schema.enum.values)
+          if (enumSet && !enumSet.has(val)) {
+            throw new Error(enumMsg || \`Field "${path}" must be one of: \${[...enumSet].join(', ')}\`)
+          }
+        ` : ''}
+        ${ // Pattern match validation
+        schema.match?.value ? `
+          const matchMsg = _schema.match?.msg || _schema.message
+          const matchVal = _schema.match?.value instanceof RegExp ? _schema.match.value : (_schema.match?.value ? new RegExp(_schema.match.value) : undefined)
+          if (matchVal && !matchVal.test(val)) {
+            throw new Error(matchMsg || \`Field "${path}" does not match required pattern\`)
+          }
+        ` : ''}
+        ${ // Custom validator function
+        schema.validate?.validator ? `
+          const validateMsg = _schema.validate?.message || _schema.message
+          const customValidator = _schema.validate?.validator
+          if (customValidator && !customValidator(val)) {
+            throw new Error(validateMsg || \`Field "${path}" failed custom validation\`)
+          }
+        ` : ''}
+        // If val is an object, filter only fields defined in the schema
+        ${ schema.type?.name === 'Object' || schema.type === undefined ? `
+          for (const k in _schema) {
+            if (val !== undefined && val !== null && val[k] === undefined) continue
+            if (val !== undefined && val !== null && _schema.any) {
+              out['${path}.'+k] = val[k]
+              delete val[k]
+            }
+          }
+          if (_schema.any) {
+            for (const k in val) {
+              out['${path}.'+k] = val[k]
+            }
+          }
+        ` : `
+          if (val !== undefined) {
+            out['${path}${isSchemaArray ? '[\' + i + \']' : ''}'] = val
+          }
+        `}
+        ${ // Apply default if value is undefined
+        schema.default !== undefined && schema.coerce ? `}` : ''}
+      `)
     }
-    // Root: do not create new object at top level
-    return build(schema, '', true)
+
+    build(schema, '', validators)
+
+    this.stringFn = `
+      let out = {}
+      {
+        ${validators.join('\n}\n\n{')}
+      }
+      return out
+    `
+
+    const validator = new Function('schema', 'data', this.stringFn)
+
+    return (schema, data) => {
+      const out = validator(schema, data)
+      return options.coerce === false ? out : expandPathsObject(out)
+    }
   }
+
 }
 
-export { Schema, Int32, Decimal128, Double }
+// Utilitário para transformar objeto de paths em objeto real aninhado
+function expandPathsObject(obj) {
+  let result = {}
+  for (let key in obj)
+  {
+    let value = obj[key]
+    let parts = []
+    let regex = /([^[.\]]+)|\[(\d+)\]/g
+    let match
+    while ((match = regex.exec(key)))
+    {
+      if (match[1] !== undefined)
+        parts.push(match[1])
+      else if (match[2] !== undefined)
+        parts.push(Number(match[2]))
+    }
+
+    let curr = result
+    for (let i = 0; i < parts.length; i++)
+    {
+      let part = parts[i]
+      let nextPart = parts[i + 1]
+      if (i === parts.length - 1)
+      {
+        curr[part] = value
+      }
+      else {
+        if (typeof nextPart === 'number')
+        {
+          if (!Array.isArray(curr[part]))
+            curr[part] = []
+        }
+        else {
+          if (typeof curr[part] !== 'object' || curr[part] === null)
+            curr[part] = {}
+        }
+        curr = curr[part]
+      }
+    }
+  }
+  return result
+}
+
+export { Schema, Int32, Decimal128, Double, expandPathsObject }
