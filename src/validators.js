@@ -4,11 +4,46 @@ const { isArray } = Array
 const INT32_MIN = -2147483648
 const INT32_MAX = 2147483647
 
+let ObjectId
+
+try { 
+  ObjectId = (await import('mongodb')).ObjectId
+}
+catch (err) { 
+  // throw new Error('mongodb module is required for ObjectId validation') 
+}
+  
 // Built-in validators for each supported type
 const validators = {
 
+  objectid: (def, val, path) => {
+    const requiredFlag = def.required?.flag
+    if ((val === undefined || val === null || val === '') && requiredFlag)
+      throw new Error(def.required?.msg || def.message || `Field "${path}" is required`)
+
+    if (val === undefined || val === null || val === '') return val
+
+    if (!ObjectId) {
+      throw new Error('mongodb module is required for ObjectId validation')
+    }
+
+    if (val instanceof ObjectId) return val
+
+    if (typeof val === 'string') {
+      // 24 hex chars
+      if (/^[a-fA-F0-9]{24}$/.test(val))
+        return new ObjectId(val)
+
+      // line break before else
+      throw new Error(def.message || `Field "${path}" must be a valid ObjectId string`)
+    }
+
+    // line break before else
+    throw new Error(def.message || `Field "${path}" must be an ObjectId or valid ObjectId string`)
+  },
+
   // String type validation and coercion
-  String: (def, val, path) => {
+  string: (def, val, path) => {
     const requiredFlag = def.required?.flag
     if ((val === undefined || val === null || val === '') && requiredFlag)
       throw new Error(def.required?.msg || def.message || `Field "${path}" is required`)
@@ -32,7 +67,7 @@ const validators = {
   },
 
   // Boolean type validation and coercion
-  Boolean: (def, val, path) => {
+  boolean: (def, val, path) => {
     const requiredFlag = def.required?.flag
     
     // false is not considered empty
@@ -42,6 +77,11 @@ const validators = {
 
     if (def.coerce === false && typeof val !== 'boolean')
       throw new Error(def.message || `Field "${path}" must be a boolean`)
+
+    if (typeof val === 'number') {
+      if (val === 1) return true
+      if (val === 0) return false
+    }
 
     if (typeof val === 'string') {
       const v = val.toLowerCase()
@@ -59,7 +99,7 @@ const validators = {
   },
 
   // Number type validation and coercion
-  Number: (def, val, path) => {
+  number: (def, val, path) => {
     const requiredFlag = def.required?.flag
     if ((val === undefined || val === null || val === '') && requiredFlag)
       throw new Error(def.required?.msg || def.message || `Field "${path}" is required`)
@@ -83,7 +123,7 @@ const validators = {
   },
 
   // Int32 type validation and coercion
-  Int32: (def, val, path) => {
+  int32: (def, val, path) => {
     const requiredFlag = def.required?.flag
     if ((val === undefined || val === null || val === '') && requiredFlag)
       throw new Error(def.required?.msg || def.message || `Field "${path}" is required`)
@@ -109,7 +149,7 @@ const validators = {
   },
 
   // Decimal128 type validation and coercion
-  Decimal128: (def, val, path) => {
+  decimal128: (def, val, path) => {
     const requiredFlag = def.required?.flag
     if ((val === undefined || val === null || val === '') && requiredFlag)
       throw new Error(def.required?.msg || def.message || `Field "${path}" is required`)
@@ -133,7 +173,7 @@ const validators = {
   },
 
   // Double type validation and coercion
-  Double: (def, val, path) => {
+  double: (def, val, path) => {
     const requiredFlag = def.required?.flag
     if ((val === undefined || val === null || val === '') && requiredFlag)
       throw new Error(def.required?.msg || def.message || `Field "${path}" is required`)
@@ -157,7 +197,7 @@ const validators = {
   },
 
   // Date type validation and coercion
-  Date: (def, val, path) => {
+  date: (def, val, path) => {
     const requiredFlag = def.required?.flag
     if ((val === undefined || val === null || val === '') && requiredFlag)
       throw new Error(def.required?.msg || def.message || `Field "${path}" is required`)
@@ -186,26 +226,26 @@ const validators = {
   },
 
   // Object type validation
-  Object: (def, val, path) => {
+  object: (def, val, path) => {
     const requiredFlag = def.required?.flag
     if ((val === undefined || val === null || val === '') && requiredFlag)
       throw new Error(def.required?.msg || def.message || `Field "${path}" is required`)
-    if (val === undefined || val === null || val === '') return val
     if (def.coerce === false && (typeof val !== 'object' || val === null || isArray(val)))
       throw new Error(def.message || `Field "${path}" must be an object`)
+    if (val === undefined || val === null || val === '') return val
     if (typeof val !== 'object' || val === null || isArray(val))
       throw new Error(def.message || `Field "${path}" must be an object`)
     return val
   },
 
   // Array type validation
-  Array: (def, val, path) => {
+  array: (def, val, path) => {
     const requiredFlag = def.required?.flag
     if ((val === undefined || val === null || val === '') && requiredFlag)
       throw new Error(def.required?.msg || def.message || `Field "${path}" is required`)
-    if (val === undefined || val === null || val === '') return val
     if (def.coerce === false && (!isArray(val) || val === null))
       throw new Error(def.message || `Field "${path}" must be an array`)
+    if (val === undefined || val === null || val === '') return val
     if (!isArray(val) || val === null)
       throw new Error(def.message || `Field "${path}" must be an array`)
     return val
