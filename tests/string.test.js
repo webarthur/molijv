@@ -56,6 +56,10 @@ describe('String', () => {
       let schema = new Schema({ name: { type: String } })
       expect(schema.validate({}).name).toBeUndefined()
     })
+    test('should throw if value is null and required', () => {
+      let schema = new Schema({ name: { type: String, required: true } })
+      expect(() => schema.validate({ name: null })).toThrow('required')
+    })
   })
 
   describe('enum', () => {
