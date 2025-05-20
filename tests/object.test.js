@@ -36,7 +36,6 @@ describe('Object', () => {
     })
     test('should not override existing value with default', () => {
       let schema = new Schema({ meta: { type: Object, default: { foo: 1 } } })
-      console.log(schema.validate({ meta: { foo: 2 } }))
       expect(schema.validate({ meta: { foo: 2 } }).meta.foo).toBe(2)
     })
   })
