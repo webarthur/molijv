@@ -1,15 +1,47 @@
 import { validators } from './validators.js'
 
+function mapTypeKeyToFn(typeKey) {
+  switch (typeKey) {
+    case 'string': return String
+    case 'number': return Number
+    case 'boolean': return Boolean
+    case 'date': return Date
+    case 'objectid': return 'objectid'
+    case 'int32': return 'int32'
+    case 'int': return 'int32'
+    case 'decimal128': return 'decimal128'
+    case 'decimal': return 'decimal128'
+    case 'double': return 'double'
+    case 'object': return Object
+    case 'array': return Array
+    default: return typeKey
+  }
+}
+
 // Normalize schema definition to internal format, applying options
 export default function normalizeSchema(schemaDef, options) {
   // Recursively normalize schema definitions
   const _normalize = (def) => {
     // Handle type as function (e.g., String, Number)
     if (typeof def === 'function') {
+      // Use function name lowercased as key for validator
       return { 
         type: def, 
-        typeValidator: validators[def.name],
+        typeValidator: validators[def.name.toLowerCase()],
         ...(options.coerce === false ? { coerce: false } : {}) 
+      }
+    }
+
+    // Handle type as string (e.g., 'string', 'number')
+    if (typeof def === 'string') {
+      // Try to map string to built-in type function if possible
+      let typeKey = def.toLowerCase()
+      let typeFn = mapTypeKeyToFn(typeKey)
+      let validatorKey = typeof typeFn === 'string' ? typeFn : typeKey
+      return {
+        type: typeFn,
+        typeValidator: validators[validatorKey],
+        ...(options.coerce === false ? { coerce: false } : {})
       }
     }
     
@@ -22,11 +54,24 @@ export default function normalizeSchema(schemaDef, options) {
     if (typeof def === 'object' && def !== null) {
       let out = {}
       if (def.type) {
-        // Field with explicit type
-        out = { ...def, type: _normalize(def.type).type }
+        // Accept type as function or string
+        let typeFn = def.type
+        let typeKey
+        if (typeof typeFn === 'function') {
+          typeKey = typeFn.name.toLowerCase()
+        }
+        else if (typeof typeFn === 'string') {
+          typeKey = typeFn.toLowerCase()
+          typeFn = mapTypeKeyToFn(typeKey)
+          typeKey = typeof typeFn === 'string' ? typeFn : typeKey
+        }
+        else {
+          typeKey = typeFn
+        }
+        out = { ...def, type: typeFn }
         // Attach typeValidator if known
-        if (validators[out.type.name]) {
-          out.typeValidator = validators[out.type.name]
+        if (validators[typeKey]) {
+          out.typeValidator = validators[typeKey]
         }
         else {
           out.typeValidator = undefined
