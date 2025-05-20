@@ -4,43 +4,43 @@ const { isArray } = Array
 const INT32_MIN = -2147483648
 const INT32_MAX = 2147483647
 
-let ObjectId
+// let ObjectId
 
-try { 
-  ObjectId = (await import('mongodb')).ObjectId
-}
-catch (err) { 
-  // throw new Error('mongodb module is required for ObjectId validation') 
-}
+// try { 
+//   ObjectId = (await import('mongodb')).ObjectId
+// }
+// catch (err) { 
+//   // throw new Error('mongodb module is required for ObjectId validation') 
+// }
   
 // Built-in validators for each supported type
 const validators = {
 
-  objectid: (def, val, path) => {
-    const requiredFlag = def.required?.flag
-    if ((val === undefined || val === null || val === '') && requiredFlag)
-      throw new Error(def.required?.msg || def.message || `Field "${path}" is required`)
+  // objectid: (def, val, path) => {
+  //   const requiredFlag = def.required?.flag
+  //   if ((val === undefined || val === null || val === '') && requiredFlag)
+  //     throw new Error(def.required?.msg || def.message || `Field "${path}" is required`)
 
-    if (val === undefined || val === null || val === '') return val
+  //   if (val === undefined || val === null || val === '') return val
 
-    if (!ObjectId) {
-      throw new Error('mongodb module is required for ObjectId validation')
-    }
+  //   if (!ObjectId) {
+  //     throw new Error('mongodb module is required for ObjectId validation')
+  //   }
 
-    if (val instanceof ObjectId) return val
+  //   if (val instanceof ObjectId) return val
 
-    if (typeof val === 'string') {
-      // 24 hex chars
-      if (/^[a-fA-F0-9]{24}$/.test(val))
-        return new ObjectId(val)
+  //   if (typeof val === 'string') {
+  //     // 24 hex chars
+  //     if (/^[a-fA-F0-9]{24}$/.test(val))
+  //       return new ObjectId(val)
 
-      // line break before else
-      throw new Error(def.message || `Field "${path}" must be a valid ObjectId string`)
-    }
+  //     // line break before else
+  //     throw new Error(def.message || `Field "${path}" must be a valid ObjectId string`)
+  //   }
 
-    // line break before else
-    throw new Error(def.message || `Field "${path}" must be an ObjectId or valid ObjectId string`)
-  },
+  //   // line break before else
+  //   throw new Error(def.message || `Field "${path}" must be an ObjectId or valid ObjectId string`)
+  // },
 
   // String type validation and coercion
   string: (def, val, path) => {
