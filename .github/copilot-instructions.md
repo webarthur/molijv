@@ -1,4 +1,8 @@
+- Project: This project is a library for validating data
+- Module: this project uses ES6 modules
+- NodeJS: this project uses NodeJS
 - JavaScript: add a line break before else, catch, and finally
 - JavaScript: never add a semicolon at the end of a line
 - JavaScript: use let instead of var
+- JavaScript: comments in en-us
 - Tests: Tests are performed in NodeJS with the jest module

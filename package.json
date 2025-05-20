@@ -5,7 +5,7 @@
   "main": "molijv.js",
   "type": "module",
   "scripts": {
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest tests"
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest --verbose tests/"
   },
   "repository": {
     "type": "git",
@@ -26,6 +26,7 @@
   "author": "Arthur Ronconi <webarthur@gmail.com> (https://devarthur.com)",
   "license": "MIT",
   "devDependencies": {
-    "jest": "^29.7.0"
+    "jest": "^29.7.0",
+    "mongodb": "^6.16.0"
   }
 }

@@ -1,12 +1,13 @@
 # TODO
 
-- README
-- npm
-- github
+- questão undefined / null / ''
 
 - Improve required check for empty array and object
-- Types as string
-- Rethink min/max for strings
-- Security: prototype pollution
 - Create project dist
 - Create a project website
+- Async
+- Custom types
+- Create method toJsonSchema()
+- Build a internal validation date function
+- Make validators return a string to join main function
+- Validate array of objects
