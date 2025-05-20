@@ -1,5 +1,5 @@
 // MoliJV - Mongoose Like JSON Validator
-
+import validationError from './src/validation-error.js'
 import normalizeSchema from './src/normalize.js'
 
 const { isArray } = Array
@@ -51,7 +51,13 @@ class Schema {
             let arr = ${dataPath.replaceAll('.', '?.')}
             if (arr !== undefined) {
               if (!Array.isArray(arr)) {
-                throw new Error('Field "${path}" must be an array')
+                // Use custom validation error
+                throw validationError({ 
+                  kind: 'array', 
+                  message: 'Field "${path}" must be an array', 
+                  path: '${path}', 
+                  value: arr 
+                })
               }
               for (let i = 0; i < arr.length; i++) {
                 let item = arr[i]
@@ -105,7 +111,13 @@ class Schema {
           const enumMsg = _schema.enum?.msg || _schema.message
           const enumSet = new Set(_schema.enum.values)
           if (enumSet && !enumSet.has(val)) {
-            throw new Error(enumMsg || \`Field "${path}" must be one of: \${[...enumSet].join(', ')}\`)
+            // Use custom validation error
+            throw validationError({ 
+              kind: 'enum', 
+              message: enumMsg || \`Field "${path}" must be one of: \${[...enumSet].join(', ')}\`, 
+              path, 
+              value: val 
+            })
           }
         ` : ''}
         ${ // Pattern match validation
@@ -113,7 +125,13 @@ class Schema {
           const matchMsg = _schema.match?.msg || _schema.message
           const matchVal = _schema.match?.value instanceof RegExp ? _schema.match.value : (_schema.match?.value ? new RegExp(_schema.match.value) : undefined)
           if (matchVal && !matchVal.test(val)) {
-            throw new Error(matchMsg || \`Field "${path}" does not match required pattern\`)
+            // Use custom validation error
+            throw validationError({ 
+              kind: 'match', 
+              message: matchMsg || \`Field "${path}" does not match required pattern\`, 
+              path, 
+              value: val 
+            })
           }
         ` : ''}
         ${ // Custom validator function
@@ -121,7 +139,13 @@ class Schema {
           const validateMsg = _schema.validate?.message || _schema.message
           const customValidator = _schema.validate?.validator
           if (customValidator && !customValidator(val)) {
-            throw new Error(validateMsg || \`Field "${path}" failed custom validation\`)
+            // Use custom validation error
+            throw validationError({ 
+              kind: 'user', 
+              message: validateMsg || \`Field "${path}" failed custom validation\`, 
+              path, 
+              value: val 
+            })
           }
         ` : ''}
         // If val is an object, filter only fields defined in the schema
@@ -151,6 +175,20 @@ class Schema {
     build(schema, '', validators)
 
     this.stringFn = `
+      function validationError({ kind, message, path, value }) {
+        let err = new Error(message)
+        err.errors = {
+          [path]: {
+            kind,
+            message,
+            name: 'ValidatorError',
+            path,
+            value
+          }
+        }
+        return err
+      }
+
       let out = {}
       {
         ${validators.join('\n}\n\n{')}
