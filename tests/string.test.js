@@ -34,6 +34,10 @@ describe('String', () => {
       let schema = new Schema({ name: { type: String, maxLength: 3 } })
       expect(() => schema.validate({ name: 'abcd' })).toThrow('length must be <= 3')
     })
+    test('should throw if string is empty and required', () => {
+      let schema = new Schema({ name: { type: String, trim: true, required: true } })
+      expect(() => schema.validate({ name: '  ' })).toThrow('is required')
+    })
   })
 
   describe('default', () => {

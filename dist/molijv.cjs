@@ -62,14 +62,16 @@ const validators = {
   // String type validation and coercion
   string: (def, val, path) => {
     const requiredFlag = def.required?.flag;
-    if ((val === undefined || val === null || val === '') && requiredFlag)
-      throw validationError({
-        kind: 'required',
-        message: def.required?.msg || def.message || `Field "${path}" is required`,
-        path,
-        value: val
-      })
-    if (val === undefined || val === null || val === '') return val
+    if (val === undefined || val === null || (typeof val === 'string' && val.trim() === '')) {
+      if (requiredFlag)
+        throw validationError({
+          kind: 'required',
+          message: def.required?.msg || def.message || `Field "${path}" is required`,
+          path,
+          value: val
+        })
+      return val
+    }
     if (def.coerce === false && typeof val !== 'string')
       throw validationError({
         kind: 'string',
@@ -113,44 +115,30 @@ const validators = {
   boolean: (def, val, path) => {
     const requiredFlag = def.required?.flag;
 
-    // false is not considered empty
-    if ((val === undefined || val === null || val === '' || (typeof val === 'string' && val.trim() === '')) && requiredFlag)
+    if (def.coerce) {
+      if (typeof val === 'number') {
+        if (val === 1) return true
+        if (val === 0) return false
+      }
+      if (typeof val === 'string') {
+        const v = val.toLowerCase();
+        if (v === '1' || v === 'true' || v === 'yes') return true
+        if (v === '0' || v === 'false' || v === 'no') return false
+      }
+    }
+
+    // Required check
+    if (requiredFlag && (val === undefined || val === null || val === ''))
       throw validationError({
         kind: 'required',
         message: def.required?.msg || def.message || `Field "${path}" is required`,
         path,
         value: val
       })
-    if (val === undefined || val === null || val === '' || (typeof val === 'string' && val.trim() === '')) return val
 
-    if (def.coerce === false && typeof val !== 'boolean')
-      throw validationError({
-        kind: 'boolean',
-        message: def.message || `Field "${path}" must be a boolean`,
-        path,
-        value: val
-      })
-
-    if (typeof val === 'number') {
-      if (val === 1) return true
-
-      if (val === 0) return false
-
-    }
-
-    if (typeof val === 'string') {
-      const v = val.toLowerCase();
-      if (v === '1' || v === 'true' || v === 'yes') return true
-
-      if (v === '0' || v === 'false' || v === 'no') return false
-
-      throw validationError({
-        kind: 'boolean',
-        message: def.message || `Field "${path}" value "${val}" is not allowed for boolean`,
-        path,
-        value: val
-      })
-    }
+    if (val === undefined || val === null || val === '')  
+      return val
+    
     if (typeof val !== 'boolean')
       throw validationError({
         kind: 'boolean',
@@ -158,13 +146,14 @@ const validators = {
         path,
         value: val
       })
+
     return val
   },
 
   // Number type validation and coercion
   number: (def, val, path) => {
     const requiredFlag = def.required?.flag;
-    if ((val === undefined || val === null || val === '') && requiredFlag)
+    if (requiredFlag && (val === undefined || val === null || val === ''))
       throw validationError({
         kind: 'required',
         message: def.required?.msg || def.message || `Field "${path}" is required`,
@@ -367,7 +356,7 @@ const validators = {
   // Date type validation and coercion
   date: (def, val, path) => {
     const requiredFlag = def.required?.flag;
-    if ((val === undefined || val === null || val === '') && requiredFlag)
+    if (requiredFlag && (val === undefined || val === null || val === ''))
       throw validationError({
         kind: 'required',
         message: def.required?.msg || def.message || `Field "${path}" is required`,

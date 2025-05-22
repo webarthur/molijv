@@ -8,7 +8,6 @@ describe('Array', () => {
       let arr = [1, 2, 3]
       expect(schema.validate({ tags: arr }).tags).toBe(arr)
     })
-
     test('should throw if value is not array and coerce is false', () => {
       let schema = new Schema({ tags: { type: Array, coerce: false } })
       expect(() => schema.validate({ tags: 'not-array' })).toThrow('must be an array')

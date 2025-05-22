@@ -31,7 +31,7 @@ describe('Boolean', () => {
   describe('bad values', () => {
     test('should throw if string is not allowed', () => {
       let schema = new Schema({ active: { type: Boolean } })
-      expect(() => schema.validate({ active: 'maybe' })).toThrow('is not allowed for boolean')
+      expect(() => schema.validate({ active: 'maybe' })).toThrow('must be a boolean')
     })
 
     test('should throw if value is not boolean', () => {
