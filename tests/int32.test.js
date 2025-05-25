@@ -1,4 +1,5 @@
-import { Schema, Int32 } from '../molijv'
+import { Schema, types } from '../molijv'
+const { Int32 } = types
 
 describe('Int32', () => {
 
@@ -33,11 +34,11 @@ describe('Int32', () => {
   describe('int32 range', () => {
     test('should throw if value is less than INT32_MIN', () => {
       let schema = new Schema({ count: { type: Int32 } })
-      expect(() => schema.validate({ count: -2147483649 })).toThrow('must be a 32-bit integer')
+      expect(() => schema.validate({ count: -2147483649 })).toThrow('must be an integer')
     })
     test('should throw if value is greater than INT32_MAX', () => {
       let schema = new Schema({ count: { type: Int32 } })
-      expect(() => schema.validate({ count: 2147483648 })).toThrow('must be a 32-bit integer')
+      expect(() => schema.validate({ count: 2147483648 })).toThrow('must be an integer')
     })
     test('should accept INT32_MIN and INT32_MAX', () => {
       let schema = new Schema({ count: { type: Int32 } })

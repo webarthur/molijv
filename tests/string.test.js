@@ -4,6 +4,14 @@ describe('String', () => {
 
   describe('type validation', () => {
     test('should return value if valid string', () => {
+      let schema = new Schema({ name: String })
+      expect(schema.validate({ name: 'Arthur' }).name).toBe('Arthur')
+    })
+    test('should return value if valid string', () => {
+      let schema = new Schema({ name: String })
+      expect(schema.validate({ name: 42 }).name).toBe('42')
+    })
+    test('should return value if valid string', () => {
       let schema = new Schema({ name: { type: String } })
       expect(schema.validate({ name: 'Arthur' }).name).toBe('Arthur')
     })
@@ -22,10 +30,10 @@ describe('String', () => {
   })
 
   describe('bad values', () => {
-    test('should throw if value is not a string and coerce is not set', () => {
-      let schema = new Schema({ name: { type: String } })
-      expect(() => schema.validate({ name: 123 })).toThrow('must be a string')
-    })
+    // test('should throw if value is not a string and coerce is not set', () => {
+    //   let schema = new Schema({ name: { type: String } })
+    //   expect(() => schema.validate({ name: 123 })).toThrow('must be a string')
+    // })
     test('should throw if string shorter than minLength', () => {
       let schema = new Schema({ name: { type: String, minLength: 5 } })
       expect(() => schema.validate({ name: 'abc' })).toThrow('length must be >= 5')
@@ -37,6 +45,10 @@ describe('String', () => {
     test('should throw if string is empty and required', () => {
       let schema = new Schema({ name: { type: String, trim: true, required: true } })
       expect(() => schema.validate({ name: '  ' })).toThrow('is required')
+    })
+    test('should throw if value is an object', () => {
+      let schema = new Schema({ name: { type: String } })
+      expect(() => schema.validate({ name: {} })).toThrow('string')
     })
   })
 

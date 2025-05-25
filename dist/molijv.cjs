@@ -15,471 +15,454 @@ function validationError({ kind, message, path, value }) {
   return err
 }
 
+/*
+1. Try to coerce the value to the expected type or throw a validation error
+2. Validate the value against the expected type or throw a validation error
+3. Check for required fields and throw a validation error if missing
+4. ETC...
+*/
+
 const { isArray: isArray$1 } = Array;
+
+// Int32 type constructor for schema typing
+function Int32() {}
+Int32.prototype.toString = () => 'Int32';
+
+// Decimal128 type constructor for schema typing
+function Decimal128() {}
+Decimal128.prototype.toString = () => 'Decimal128';
+
+// Double type constructor for schema typing
+function Double() {}
+Double.prototype.toString = () => 'Double';
 
 // Int32 range constants
 const INT32_MIN = -2147483648;
 const INT32_MAX = 2147483647;
 
-// let ObjectId
-
-// try { 
-//   ObjectId = (await import('mongodb')).ObjectId
-// }
-// catch (err) { 
-//   // throw new Error('mongodb module is required for ObjectId validation') 
-// }
-  
 // Built-in validators for each supported type
 const validators = {
 
-  // objectid: (def, val, path) => {
-  //   const requiredFlag = def.required?.flag
-  //   if ((val === undefined || val === null || val === '') && requiredFlag)
-  //     throw new Error(def.required?.msg || def.message || `Field "${path}" is required`)
-
-  //   if (val === undefined || val === null || val === '') return val
-
-  //   if (!ObjectId) {
-  //     throw new Error('mongodb module is required for ObjectId validation')
-  //   }
-
-  //   if (val instanceof ObjectId) return val
-
-  //   if (typeof val === 'string') {
-  //     // 24 hex chars
-  //     if (/^[a-fA-F0-9]{24}$/.test(val))
-  //       return new ObjectId(val)
-
-  //     // line break before else
-  //     throw new Error(def.message || `Field "${path}" must be a valid ObjectId string`)
-  //   }
-
-  //   // line break before else
-  //   throw new Error(def.message || `Field "${path}" must be an ObjectId or valid ObjectId string`)
-  // },
-
   // String type validation and coercion
-  string: (def, val, path) => {
-    const requiredFlag = def.required?.flag;
-    if (val === undefined || val === null || (typeof val === 'string' && val.trim() === '')) {
-      if (requiredFlag)
+  string: {
+    type: String,
+    alias: 'str',
+    validator: (def, val, path) => {
+      const type = typeof val;
+      if (def.coerce === false && type !== 'string')
         throw validationError({
-          kind: 'required',
-          message: def.required?.msg || def.message || `Field "${path}" is required`,
+          kind: 'string',
+          message: def.message || `Field "${path}" must be a string`,
+          path,
+          value: val
+        })
+      let str = val;
+      if (def.coerce !== false) {
+        if (type === 'number' || type === 'boolean' || type === 'bigint') {
+          str = String(str);
+        }
+        // Apply string transformations if enabled
+        if (def.trim) str = str.trim();
+        if (def.lowercase) str = str.toLowerCase();
+        if (def.uppercase) str = str.toUpperCase();
+      }
+      if (typeof str !== 'string')
+        throw validationError({
+          kind: 'string',
+          message: def.message || `Field "${path}" must be a string`,
+          path,
+          value: val
+        })
+      // Length checks
+      if (def.minLength !== undefined && str.length < def.minLength)
+        throw validationError({
+          kind: 'minlength',
+          message: def.message || `Field "${path}" length must be >= ${def.minLength}`,
+          path,
+          value: str
+        })
+      if (def.maxLength !== undefined && str.length > def.maxLength)
+        throw validationError({
+          kind: 'maxlength',
+          message: def.message || `Field "${path}" length must be <= ${def.maxLength}`,
+          path,
+          value: str
+        })
+      return str
+    }
+  },
+
+  // Boolean type validation and coercion
+  boolean: {
+    type: Boolean,
+    alias: 'bool',
+    validator: (def, val, path) => {
+      if (val === null || val === '') return null
+      if (def.coerce) {
+        if (typeof val === 'number') {
+          if (val === 1) return true
+          if (val === 0) return false
+        }
+        if (typeof val === 'string') {
+          const v = val.toLowerCase();
+          if (v === '1' || v === 'true' || v === 'yes') return true
+          if (v === '0' || v === 'false' || v === 'no') return false
+        }
+      }
+      if (typeof val !== 'boolean')
+        throw validationError({
+          kind: 'boolean',
+          message: def.message || `Field "${path}" must be a boolean`,
           path,
           value: val
         })
       return val
     }
-    if (def.coerce === false && typeof val !== 'string')
-      throw validationError({
-        kind: 'string',
-        message: def.message || `Field "${path}" must be a string`,
-        path,
-        value: val
-      })
-    if (typeof val !== 'string')
-      throw validationError({
-        kind: 'string',
-        message: def.message || `Field "${path}" must be a string`,
-        path,
-        value: val
-      })
-    let str = val;
-    // Apply string transformations if enabled
-    if (def.coerce !== false) {
-      if (def.trim) str = str.trim();
-      if (def.lowercase) str = str.toLowerCase();
-      if (def.uppercase) str = str.toUpperCase();
-    }
-    // Length checks
-    if (def.minLength !== undefined && str.length < def.minLength)
-      throw validationError({
-        kind: 'minlength',
-        message: def.message || `Field "${path}" length must be >= ${def.minLength}`,
-        path,
-        value: str
-      })
-    if (def.maxLength !== undefined && str.length > def.maxLength)
-      throw validationError({
-        kind: 'maxlength',
-        message: def.message || `Field "${path}" length must be <= ${def.maxLength}`,
-        path,
-        value: str
-      })
-    return str
-  },
-
-  // Boolean type validation and coercion
-  boolean: (def, val, path) => {
-    const requiredFlag = def.required?.flag;
-
-    if (def.coerce) {
-      if (typeof val === 'number') {
-        if (val === 1) return true
-        if (val === 0) return false
-      }
-      if (typeof val === 'string') {
-        const v = val.toLowerCase();
-        if (v === '1' || v === 'true' || v === 'yes') return true
-        if (v === '0' || v === 'false' || v === 'no') return false
-      }
-    }
-
-    // Required check
-    if (requiredFlag && (val === undefined || val === null || val === ''))
-      throw validationError({
-        kind: 'required',
-        message: def.required?.msg || def.message || `Field "${path}" is required`,
-        path,
-        value: val
-      })
-
-    if (val === undefined || val === null || val === '')  
-      return val
-    
-    if (typeof val !== 'boolean')
-      throw validationError({
-        kind: 'boolean',
-        message: def.message || `Field "${path}" must be a boolean`,
-        path,
-        value: val
-      })
-
-    return val
   },
 
   // Number type validation and coercion
-  number: (def, val, path) => {
-    const requiredFlag = def.required?.flag;
-    if (requiredFlag && (val === undefined || val === null || val === ''))
-      throw validationError({
-        kind: 'required',
-        message: def.required?.msg || def.message || `Field "${path}" is required`,
-        path,
-        value: val
-      })
-    if (val === undefined || val === null || val === '') return val
-    if (def.coerce === false && (typeof val !== 'number' || Number.isNaN(val) || !Number.isFinite(val)))
-      throw validationError({
-        kind: 'number',
-        message: def.message || `Field "${path}" must be a valid finite number`,
-        path,
-        value: val
-      })
-    let num = val;
-    // Coerce string to number if allowed
-    if (typeof num === 'string' && def.coerce !== false) {
-      const coerced = Number(num);
-      if (!isNaN(coerced)) num = coerced;
+  number: {
+    type: Number,
+    alias: 'num',
+    validator: (def, val, path) => {
+      const type = typeof val;
+      let num = val;
+      if (num === null || num === '') return null
+      if (def.coerce !== false) {
+        if (type === 'string' && num !== '' || type === 'boolean' || type === 'bigint') {
+          num = Number(num);
+          if (isNaN(num)) {
+            throw validationError({
+              kind: 'int32',
+              message: def.message || `Field "${path}" must be a number`,
+              path,
+              value: val
+            })
+          }
+        }
+      }
+      if (typeof num !== 'number' || Number.isNaN(num)) {
+        throw validationError({
+          kind: 'int32',
+          message: def.message || `Field "${path}" must be a number`,
+          path,
+          value: val
+        })
+      }
+      if (!Number.isFinite(num))
+        throw validationError({
+          kind: 'number',
+          message: def.message || `Field "${path}" must be a valid finite number`,
+          path,
+          value: val
+        })
+      // Range checks
+      if (def.min?.flag !== undefined && num < def.min.flag)
+        throw validationError({
+          kind: 'min',
+          message: def.min?.msg || def.message || `Field "${path}" must be >= ${def.min.flag}`,
+          path,
+          value: num
+        })
+      if (def.max?.flag !== undefined && num > def.max.flag)
+        throw validationError({
+          kind: 'max',
+          message: def.max?.msg || def.message || `Field "${path}" must be <= ${def.max.flag}`,
+          path,
+          value: num
+        })
+      return num
     }
-    if (typeof num !== 'number' || Number.isNaN(num) || !Number.isFinite(num))
-      throw validationError({
-        kind: 'number',
-        message: def.message || `Field "${path}" must be a valid finite number`,
-        path,
-        value: val
-      })
-    // Range checks
-    if (def.min?.flag !== undefined && num < def.min.flag)
-      throw validationError({
-        kind: 'min',
-        message: def.min?.msg || def.message || `Field "${path}" must be >= ${def.min.flag}`,
-        path,
-        value: num
-      })
-    if (def.max?.flag !== undefined && num > def.max.flag)
-      throw validationError({
-        kind: 'max',
-        message: def.max?.msg || def.message || `Field "${path}" must be <= ${def.max.flag}`,
-        path,
-        value: num
-      })
-    return num
   },
 
   // Int32 type validation and coercion
-  int32: (def, val, path) => {
-    const requiredFlag = def.required?.flag;
-    if ((val === undefined || val === null || val === '') && requiredFlag)
-      throw validationError({
-        kind: 'required',
-        message: def.required?.msg || def.message || `Field "${path}" is required`,
-        path,
-        value: val
-      })
-    if (val === undefined || val === null || val === '') return val
-    if (def.coerce === false && (typeof val !== 'number' || !Number.isInteger(val)))
-      throw validationError({
-        kind: 'int32',
-        message: def.message || `Field "${path}" must be an integer`,
-        path,
-        value: val
-      })
-    let num = val;
-    // Coerce string to integer if allowed
-    if (typeof num === 'string' && num !== '' && def.coerce !== false) {
-      const coerced = Number(num);
-      if (!isNaN(coerced)) num = coerced;
+  int32: {
+    type: Int32,
+    alias: 'int',
+    validator: (def, val, path) => {
+      const type = typeof val;
+      let num = val;
+      if (num === null || num === '') return null
+      if (def.coerce !== false) {
+        if (type === 'string' && num !== '' || type === 'boolean' || type === 'bigint') {
+          num = Number(num);
+          if (isNaN(num)) {
+            throw validationError({
+              kind: 'int32',
+              message: def.message || `Field "${path}" must be an integer`,
+              path,
+              value: val
+            })
+          }
+        }
+      }
+      if (typeof num !== 'number' || !Number.isInteger(num)) {
+        throw validationError({
+          kind: 'int32',
+          message: def.message || `Field "${path}" must be an integer`,
+          path,
+          value: val
+        })
+      }
+      if (num < INT32_MIN || num > INT32_MAX)
+        throw validationError({
+          kind: 'int32',
+          message: def.message || `Field "${path}" must be an integer between ${INT32_MIN} and ${INT32_MAX}`,
+          path,
+          value: num
+        })
+      if (def.min?.flag !== undefined && num < def.min.flag)
+        throw validationError({
+          kind: 'min',
+          message: def.min?.msg || def.message || `Field "${path}" must be >= ${def.min.flag}`,
+          path,
+          value: num
+        })
+      if (def.max?.flag !== undefined && num > def.max.flag)
+        throw validationError({
+          kind: 'max',
+          message: def.max?.msg || def.message || `Field "${path}" must be <= ${def.max.flag}`,
+          path,
+          value: num
+        })
+      return num
     }
-    if (typeof num !== 'number' || !Number.isInteger(num))
-      throw validationError({
-        kind: 'int32',
-        message: def.message || `Field "${path}" must be an integer`,
-        path,
-        value: val
-      })
-    if (num < INT32_MIN || num > INT32_MAX)
-      throw validationError({
-        kind: 'int32',
-        message: def.message || `Field "${path}" must be a 32-bit integer`,
-        path,
-        value: num
-      })
-    // Range checks
-    if (def.min?.flag !== undefined && num < def.min.flag)
-      throw validationError({
-        kind: 'min',
-        message: def.min?.msg || def.message || `Field "${path}" must be >= ${def.min.flag}`,
-        path,
-        value: num
-      })
-    if (def.max?.flag !== undefined && num > def.max.flag)
-      throw validationError({
-        kind: 'max',
-        message: def.max?.msg || def.message || `Field "${path}" must be <= ${def.max.flag}`,
-        path,
-        value: num
-      })
-    return num
   },
 
   // Decimal128 type validation and coercion
-  decimal128: (def, val, path) => {
-    const requiredFlag = def.required?.flag;
-    if ((val === undefined || val === null || val === '') && requiredFlag)
-      throw validationError({
-        kind: 'required',
-        message: def.required?.msg || def.message || `Field "${path}" is required`,
-        path,
-        value: val
-      })
-    if (val === undefined || val === null || val === '') return val
-    if (def.coerce === false && (typeof val !== 'number' || !Number.isFinite(val)))
-      throw validationError({
-        kind: 'decimal128',
-        message: def.message || `Field "${path}" must be a finite decimal number`,
-        path,
-        value: val
-      })
-    let num = val;
-    // Coerce string to number if allowed
-    if (typeof num === 'string' && num !== '' && def.coerce !== false) {
-      const coerced = Number(num);
-      if (!isNaN(coerced)) num = coerced;
+  decimal128: {
+    type: Decimal128,
+    alias: 'decimal',
+    validator: (def, val, path) => {
+      const type = typeof val;
+      let num = val;
+      if (num === null || num === '') return null
+      if (def.coerce !== false) {
+        if (type === 'string' && num !== '' || type === 'boolean' || type === 'bigint') {
+          num = Number(num);
+          if (isNaN(num)) {
+            throw validationError({
+              kind: 'decimal128',
+              message: def.message || `Field "${path}" must be a decimal`,
+              path,
+              value: val
+            })
+          }
+        }
+      }
+      if (typeof num !== 'number' || Number.isNaN(num)) {
+        throw validationError({
+          kind: 'decimal128',
+          message: def.message || `Field "${path}" must be a decimal`,
+          path,
+          value: val
+        })
+      }
+      if (!Number.isFinite(num))
+        throw validationError({
+          kind: 'decimal128',
+          message: def.message || `Field "${path}" must be a valid finite decimal`,
+          path,
+          value: val
+        })
+      // Range checks
+      if (def.min?.flag !== undefined && num < def.min.flag)
+        throw validationError({
+          kind: 'min',
+          message: def.min?.msg || def.message || `Field "${path}" must be >= ${def.min.flag}`,
+          path,
+          value: num
+        })
+      if (def.max?.flag !== undefined && num > def.max.flag)
+        throw validationError({
+          kind: 'max',
+          message: def.max?.msg || def.message || `Field "${path}" must be <= ${def.max.flag}`,
+          path,
+          value: num
+        })
+      return num
     }
-    if (typeof num !== 'number' || !Number.isFinite(num))
-      throw validationError({
-        kind: 'decimal128',
-        message: def.message || `Field "${path}" must be a finite decimal number`,
-        path,
-        value: val
-      })
-    // Range checks
-    if (def.min?.flag !== undefined && num < def.min.flag)
-      throw validationError({
-        kind: 'min',
-        message: def.min?.msg || def.message || `Field "${path}" must be >= ${def.min.flag}`,
-        path,
-        value: num
-      })
-    if (def.max?.flag !== undefined && num > def.max.flag)
-      throw validationError({
-        kind: 'max',
-        message: def.max?.msg || def.message || `Field "${path}" must be <= ${def.max.flag}`,
-        path,
-        value: num
-      })
-    return num
   },
 
   // Double type validation and coercion
-  double: (def, val, path) => {
-    const requiredFlag = def.required?.flag;
-    if ((val === undefined || val === null || val === '') && requiredFlag)
-      throw validationError({
-        kind: 'required',
-        message: def.required?.msg || def.message || `Field "${path}" is required`,
-        path,
-        value: val
-      })
-    if (val === undefined || val === null || val === '') return val
-    if (def.coerce === false && (typeof val !== 'number' || !Number.isFinite(val)))
-      throw validationError({
-        kind: 'double',
-        message: def.message || `Field "${path}" must be a finite double`,
-        path,
-        value: val
-      })
-    let num = val;
-    // Coerce string to number if allowed
-    if (typeof num === 'string' && num !== '' && def.coerce !== false) {
-      const coerced = Number(num);
-      if (!isNaN(coerced)) num = coerced;
+  double: {
+    type: Double,
+    validator: (def, val, path) => {
+      const type = typeof val;
+      let num = val;
+      if (num === null || num === '') return null
+      if (def.coerce !== false) {
+        if (type === 'string' && num !== '' || type === 'boolean' || type === 'bigint') {
+          num = Number(num);
+          if (isNaN(num)) {
+            throw validationError({
+              kind: 'double',
+              message: def.message || `Field "${path}" must be a double`,
+              path,
+              value: val
+            })
+          }
+        }
+      }
+      if (typeof num !== 'number' || Number.isNaN(num)) {
+        throw validationError({
+          kind: 'double',
+          message: def.message || `Field "${path}" must be a double`,
+          path,
+          value: val
+        })
+      }
+      if (!Number.isFinite(num))
+        throw validationError({
+          kind: 'double',
+          message: def.message || `Field "${path}" must be a valid finite double`,
+          path,
+          value: val
+        })
+      // Range checks
+      if (def.min?.flag !== undefined && num < def.min.flag)
+        throw validationError({
+          kind: 'min',
+          message: def.min?.msg || def.message || `Field "${path}" must be >= ${def.min.flag}`,
+          path,
+          value: num
+        })
+      if (def.max?.flag !== undefined && num > def.max.flag)
+        throw validationError({
+          kind: 'max',
+          message: def.max?.msg || def.message || `Field "${path}" must be <= ${def.max.flag}`,
+          path,
+          value: num
+        })
+      return num
     }
-    if (typeof num !== 'number' || !Number.isFinite(num))
-      throw validationError({
-        kind: 'double',
-        message: def.message || `Field "${path}" must be a finite double`,
-        path,
-        value: val
-      })
-    // Range checks
-    if (def.min?.flag !== undefined && num < def.min.flag)
-      throw validationError({
-        kind: 'min',
-        message: def.min?.msg || def.message || `Field "${path}" must be >= ${def.min.flag}`,
-        path,
-        value: num
-      })
-    if (def.max?.flag !== undefined && num > def.max.flag)
-      throw validationError({
-        kind: 'max',
-        message: def.max?.msg || def.message || `Field "${path}" must be <= ${def.max.flag}`,
-        path,
-        value: num
-      })
-    return num
   },
 
   // Date type validation and coercion
-  date: (def, val, path) => {
-    const requiredFlag = def.required?.flag;
-    if (requiredFlag && (val === undefined || val === null || val === ''))
-      throw validationError({
-        kind: 'required',
-        message: def.required?.msg || def.message || `Field "${path}" is required`,
-        path,
-        value: val
-      })
-    if (val === undefined || val === null || val === '') return val
-    if (def.coerce === false && !(val instanceof Date))
-      throw validationError({
-        kind: 'date',
-        message: def.message || `Field "${path}" must be a valid date`,
-        path,
-        value: val
-      })
-    let dateVal = val;
-    // Coerce to Date if allowed
-    if (!(val instanceof Date) && def.coerce !== false) {
-      dateVal = new Date(val);
-    }
-    if (!(dateVal instanceof Date) || isNaN(dateVal.getTime()))
-      throw validationError({
-        kind: 'date',
-        message: def.message || `Field "${path}" must be a valid date`,
-        path,
-        value: val
-      })
-    // Range checks
-    if (def.min?.flag !== undefined) {
-      const minDate = def.min.flag instanceof Date ? def.min.flag : new Date(def.min.flag);
-      if (dateVal < minDate)
+  date: {
+    type: Date,
+    validator: (def, val, path) => {
+      if (val === null || val === '') return null
+      if (def.coerce === false && !(val instanceof Date))
         throw validationError({
-          kind: 'min',
-          message: def.min?.msg || def.message || `Field "${path}" must be after ${def.min.flag}`,
+          kind: 'date',
+          message: def.message || `Field "${path}" must be a valid date`,
           path,
-          value: dateVal
+          value: val
         })
-    }
-    if (def.max?.flag !== undefined) {
-      const maxDate = def.max.flag instanceof Date ? def.max.flag : new Date(def.max.flag);
-      if (dateVal > maxDate)
+      let dateVal = val;
+      // Coerce to Date if allowed
+      if (!(val instanceof Date) && def.coerce !== false) {
+        dateVal = new Date(val);
+      }
+      if (!(dateVal instanceof Date) || isNaN(dateVal.getTime()))
         throw validationError({
-          kind: 'max',
-          message: def.max?.msg || def.message || `Field "${path}" must be before ${def.max.flag}`,
+          kind: 'date',
+          message: def.message || `Field "${path}" must be a valid date`,
           path,
-          value: dateVal
+          value: val
         })
+      // Range checks
+      if (def.min?.flag !== undefined) {
+        const minDate = def.min.flag instanceof Date ? def.min.flag : new Date(def.min.flag);
+        if (dateVal < minDate)
+          throw validationError({
+            kind: 'min',
+            message: def.min?.msg || def.message || `Field "${path}" must be after ${def.min.flag}`,
+            path,
+            value: dateVal
+          })
+      }
+      if (def.max?.flag !== undefined) {
+        const maxDate = def.max.flag instanceof Date ? def.max.flag : new Date(def.max.flag);
+        if (dateVal > maxDate)
+          throw validationError({
+            kind: 'max',
+            message: def.max?.msg || def.message || `Field "${path}" must be before ${def.max.flag}`,
+            path,
+            value: dateVal
+          })
+      }
+      return dateVal
     }
-    return dateVal
   },
 
   // Object type validation
-  object: (def, val, path) => {
-    const requiredFlag = def.required?.flag;
-    if ((val === undefined || val === null || val === '') && requiredFlag)
-      throw validationError({
-        kind: 'required',
-        message: def.required?.msg || def.message || `Field "${path}" is required`,
-        path,
-        value: val
-      })
-    if (def.coerce === false && (typeof val !== 'object' || val === null || isArray$1(val)))
-      throw validationError({
-        kind: 'object',
-        message: def.message || `Field "${path}" must be an object`,
-        path,
-        value: val
-      })
-    if (val === undefined || val === null || val === '') return val
-    if (typeof val !== 'object' || val === null || isArray$1(val))
-      throw validationError({
-        kind: 'object',
-        message: def.message || `Field "${path}" must be an object`,
-        path,
-        value: val
-      })
-    return val
+  object: {
+    type: Object,
+    validator: (def, val, path) => {
+      if (val === null || val === '') return null
+      if (def.coerce === false && (typeof val !== 'object' || val === null || isArray$1(val)))
+        throw validationError({
+          kind: 'object',
+          message: def.message || `Field "${path}" must be an object`,
+          path,
+          value: val
+        })
+      if (typeof val !== 'object' || val === null || isArray$1(val))
+        throw validationError({
+          kind: 'object',
+          message: def.message || `Field "${path}" must be an object`,
+          path,
+          value: val
+        })
+      return val
+    }
   },
 
   // Array type validation
-  array: (def, val, path) => {
-    const requiredFlag = def.required?.flag;
-    if ((val === undefined || val === null || val === '') && requiredFlag)
-      throw validationError({
-        kind: 'required',
-        message: def.required?.msg || def.message || `Field "${path}" is required`,
-        path,
-        value: val
-      })
-    if (def.coerce === false && (!isArray$1(val) || val === null))
-      throw validationError({
-        kind: 'array',
-        message: def.message || `Field "${path}" must be an array`,
-        path,
-        value: val
-      })
-    if (val === undefined || val === null || val === '') return val
-    if (!isArray$1(val) || val === null)
-      throw validationError({
-        kind: 'array',
-        message: def.message || `Field "${path}" must be an array`,
-        path,
-        value: val
-      })
-    return val
+  array: {
+    type: Array,
+    validator: (def, val, path) => {
+      if (val === null || val === '') return null
+      if (def.coerce === false && (!isArray$1(val) || val === null))
+        throw validationError({
+          kind: 'array',
+          message: def.message || `Field "${path}" must be an array`,
+          path,
+          value: val
+        })
+      if (!isArray$1(val) || val === null)
+        throw validationError({
+          kind: 'array',
+          message: def.message || `Field "${path}" must be an array`,
+          path,
+          value: val
+        })
+      return val
+    }
   }
 };
 
-function mapTypeKeyToFn(typeKey) {
-  switch (typeKey) {
-    case 'string': return String
-    case 'number': return Number
-    case 'boolean': return Boolean
-    case 'date': return Date
-    case 'objectid': return 'objectid'
-    case 'int32': return 'int32'
-    case 'int': return 'int32'
-    case 'decimal128': return 'decimal128'
-    case 'decimal': return 'decimal128'
-    case 'double': return 'double'
-    case 'object': return Object
-    case 'array': return Array
-    default: return typeKey
+const alias = {};
+for (const v in validators) {
+  alias[v] = validators[v];
+  if (validators[v].alias) {
+    alias[validators[v].alias] = validators[v];
   }
+}
+
+const types = {};
+for (const v in validators) {
+  types[validators[v].type.name] = validators[v].type.name;
+}
+
+function getType (typeName) {
+  let key;
+  if (typeof typeName === 'function') {
+    key = typeName.name.toLowerCase();
+  }
+  else if (typeof typeName === 'string') {
+    key = typeName.toLowerCase();
+  }
+  
+  const type = alias[key];
+
+  if (!type) {
+    throw new Error(`Unknown type: ${key}`)
+  }
+
+  return type
 }
 
 // Normalize schema definition to internal format, applying options
@@ -487,25 +470,14 @@ function normalizeSchema(schemaDef, options) {
   // Recursively normalize schema definitions
   const _normalize = (def) => {
     // Handle type as function (e.g., String, Number)
-    if (typeof def === 'function') {
+    // or type as string (e.g., 'string', 'number')
+    if (typeof def === 'function' || typeof def === 'string') {
       // Use function name lowercased as key for validator
+      let { type, validator } = getType (def.name);
       return { 
-        type: def, 
-        typeValidator: validators[def.name.toLowerCase()],
+        type, 
+        typeValidator: validator,
         ...(options.coerce === false ? { coerce: false } : {}) 
-      }
-    }
-
-    // Handle type as string (e.g., 'string', 'number')
-    if (typeof def === 'string') {
-      // Try to map string to built-in type function if possible
-      let typeKey = def.toLowerCase();
-      let typeFn = mapTypeKeyToFn(typeKey);
-      let validatorKey = typeof typeFn === 'string' ? typeFn : typeKey;
-      return {
-        type: typeFn,
-        typeValidator: validators[validatorKey],
-        ...(options.coerce === false ? { coerce: false } : {})
       }
     }
     
@@ -519,34 +491,18 @@ function normalizeSchema(schemaDef, options) {
       let out = {};
       if (def.type) {
         // Accept type as function or string
-        let typeFn = def.type;
-        let typeKey;
-        if (typeof typeFn === 'function') {
-          typeKey = typeFn.name.toLowerCase();
-        }
-        else if (typeof typeFn === 'string') {
-          typeKey = typeFn.toLowerCase();
-          typeFn = mapTypeKeyToFn(typeKey);
-          typeKey = typeof typeFn === 'string' ? typeFn : typeKey;
-        }
-        else {
-          typeKey = typeFn;
-        }
-        out = { ...def, type: typeFn };
-        // Attach typeValidator if known
-        if (validators[typeKey]) {
-          out.typeValidator = validators[typeKey];
-        }
-        else {
-          out.typeValidator = undefined;
-        }
+        let { type, validator } = getType (def.type);
+        out = { ...def, type, typeValidator: validator };
+        
         // Propagate coerce: false from global if not set on field
-        out.coerce = def.coerce === undefined && options.coerce === false ? false : true;
+        out.coerce = !def.coerce && options.coerce === false ? false : true;
       }
       else {
         // Recursively normalize each field
         for (const k in def) {
-          out[k] = _normalize(def[k]);
+          if (k !== 'validate') {
+            out[k] = _normalize(def[k]);
+          }
         }
       }
       
@@ -569,8 +525,9 @@ function normalizeSchema(schemaDef, options) {
       // Normalize validate to always be { validator, message }
       if (out.validate !== undefined) {
         if (Array.isArray(out.validate)) {
-          if (typeof out.validate[0] === 'function' || (typeof out.validate[0] === 'object' && typeof out.validate[0].validator === 'function')) {
-            if (typeof out.validate[0] === 'function') {
+          const type = typeof out.validate[0];
+          if (type === 'function' || (type === 'object' && type.validator === 'function')) {
+            if (type === 'function') {
               out.validate = { validator: out.validate[0], message: out.validate[1] };
             }
             else {
@@ -632,20 +589,9 @@ function normalizeSchema(schemaDef, options) {
 }
 
 // MoliJV - Mongoose Like JSON Validator
+// import validationError from './src/validation-error.js'
 
 const { isArray } = Array;
-
-// Int32 type constructor for schema typing
-function Int32() {}
-Int32.prototype.toString = () => 'Int32';
-
-// Decimal128 type constructor for schema typing
-function Decimal128() {}
-Decimal128.prototype.toString = () => 'Decimal128';
-
-// Double type constructor for schema typing
-function Double() {}
-Double.prototype.toString = () => 'Double';
 
 // Schema class for validation and coercion
 class Schema {
@@ -723,19 +669,32 @@ class Schema {
       validators.push(`
         // Handle primitive field schema
         const _schema = ${schemaPath}${isSchemaArray ? '[0]' : ''}
-        const path = '${path}'
+        const path = '${path}${isSchemaArray ? '[\' + i + \']' : '' }'
         let val = ${isSchemaArray ? 'item' : dataPath.replaceAll('.', '?.') }
         ${ // Type validation and coercion
-        schema.typeValidator ? `
-          const newVal = _schema.typeValidator(_schema, val, path)
-          if (_schema.coerce !== false && newVal !== val) val = newVal
+        schema.required ? `
+          if (val === undefined || val === null || (typeof val === 'string' && val.trim() === '')) {
+            // Use custom validation error
+            throw validationError({ 
+              kind: 'required', 
+              message: _schema.required.msg || _schema.message || \`Field "${path}" is required\`, 
+              path, 
+              value: val 
+            })
+          }
         ` : ''}
         ${ // Apply default if value is undefined
         schema.default !== undefined && schema.coerce ? `
           const defaultVal = _schema.default
           if (val === undefined) {
             out['${path}${isSchemaArray ? '[\' + i + \']' : ''}'] = typeof defaultVal === 'function' ? defaultVal() : defaultVal
-          } else {
+          }
+        ` : ''}
+        if (val !== undefined) {
+        ${ // Type validation and coercion
+        schema.typeValidator ? `
+          const newVal = _schema.typeValidator(_schema, val, path)
+          if (_schema.coerce !== false && newVal !== val) val = newVal
         ` : ''}
         ${ // Enum validation
         schema.enum?.values ? `
@@ -798,8 +757,7 @@ class Schema {
             out['${path}${isSchemaArray ? '[\' + i + \']' : ''}'] = val
           }
         `}
-        ${ // Apply default if value is undefined
-        schema.default !== undefined && schema.coerce ? `}` : ''}
+        }
       `);
     }
 
@@ -880,8 +838,8 @@ function expandPathsObject(obj) {
   return result
 }
 
-exports.Decimal128 = Decimal128;
-exports.Double = Double;
-exports.Int32 = Int32;
+const Types = types;
+
 exports.Schema = Schema;
-exports.expandPathsObject = expandPathsObject;
+exports.Types = Types;
+exports.types = types;

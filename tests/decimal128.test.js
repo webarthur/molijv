@@ -1,4 +1,5 @@
-import { Schema, Decimal128 } from '../molijv'
+import { Schema, types } from '../molijv'
+const { Decimal128 } = types
 
 describe('Decimal128', () => {
 
@@ -16,22 +17,22 @@ describe('Decimal128', () => {
 
     test('should throw if value is not number and coerce is false', () => {
       let schema = new Schema({ value: { type: Decimal128, coerce: false } })
-      expect(() => schema.validate({ value: '3.14' })).toThrow('must be a finite decimal number')
-      // expect(() => schema.validate({ value: null })).toThrow('must be a finite decimal number')
+      expect(() => schema.validate({ value: '3.14' })).toThrow('must be a decimal')
+      // expect(() => schema.validate({ value: null })).toThrow('must be a decimal')
     })
 
     test('should throw if value is not finite', () => {
       let schema = new Schema({ value: { type: Decimal128 } })
-      expect(() => schema.validate({ value: NaN })).toThrow('must be a finite decimal number')
-      expect(() => schema.validate({ value: Infinity })).toThrow('must be a finite decimal number')
+      expect(() => schema.validate({ value: Infinity })).toThrow('must be a valid finite decimal')
     })
   })
-
+  
   describe('bad values', () => {
     test('should throw if value is not a number', () => {
       let schema = new Schema({ value: { type: Decimal128 } })
-      expect(() => schema.validate({ value: 'abc' })).toThrow('must be a finite decimal number')
-      expect(() => schema.validate({ value: {} })).toThrow('must be a finite decimal number')
+      expect(() => schema.validate({ value: NaN })).toThrow('must be a decimal')
+      expect(() => schema.validate({ value: 'abc' })).toThrow('must be a decimal')
+      expect(() => schema.validate({ value: {} })).toThrow('must be a decimal')
     })
   })
 

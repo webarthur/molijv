@@ -25,16 +25,17 @@ describe('Number', () => {
 
     test('should throw if value is NaN or not finite', () => {
       let schema = new Schema({ age: { type: Number } })
-      expect(() => schema.validate({ age: NaN })).toThrow('must be a valid finite number')
       expect(() => schema.validate({ age: Infinity })).toThrow('must be a valid finite number')
+      expect(() => schema.validate({ age: -Infinity })).toThrow('must be a valid finite number')
     })
   })
 
   describe('bad values', () => {
     test('should throw if value is not a number', () => {
       let schema = new Schema({ age: { type: Number } })
-      expect(() => schema.validate({ age: 'abc' })).toThrow('must be a valid finite number')
-      expect(() => schema.validate({ age: {} })).toThrow('must be a valid finite number')
+      expect(() => schema.validate({ age: NaN })).toThrow('must be a number')
+      expect(() => schema.validate({ age: 'abc' })).toThrow('must be a number')
+      expect(() => schema.validate({ age: {} })).toThrow('must be a number')
     })
   })
 

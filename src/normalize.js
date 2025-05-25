@@ -1,21 +1,21 @@
-import { validators } from './validators.js'
+import { validatorsAlias } from './types.js'
 
-function mapTypeKeyToFn(typeKey) {
-  switch (typeKey) {
-    case 'string': return String
-    case 'number': return Number
-    case 'boolean': return Boolean
-    case 'date': return Date
-    case 'objectid': return 'objectid'
-    case 'int32': return 'int32'
-    case 'int': return 'int32'
-    case 'decimal128': return 'decimal128'
-    case 'decimal': return 'decimal128'
-    case 'double': return 'double'
-    case 'object': return Object
-    case 'array': return Array
-    default: return typeKey
+function getType (typeName) {
+  let key
+  if (typeof typeName === 'function') {
+    key = typeName.name.toLowerCase()
   }
+  else if (typeof typeName === 'string') {
+    key = typeName.toLowerCase()
+  }
+  
+  const type = validatorsAlias[key]
+
+  if (!type) {
+    throw new Error(`Unknown type: ${key}`)
+  }
+
+  return type
 }
 
 // Normalize schema definition to internal format, applying options
@@ -23,25 +23,14 @@ export default function normalizeSchema(schemaDef, options) {
   // Recursively normalize schema definitions
   const _normalize = (def) => {
     // Handle type as function (e.g., String, Number)
-    if (typeof def === 'function') {
+    // or type as string (e.g., 'string', 'number')
+    if (typeof def === 'function' || typeof def === 'string') {
       // Use function name lowercased as key for validator
+      let { type, validator } = getType (def.name)
       return { 
-        type: def, 
-        typeValidator: validators[def.name.toLowerCase()],
+        type, 
+        typeValidator: validator,
         ...(options.coerce === false ? { coerce: false } : {}) 
-      }
-    }
-
-    // Handle type as string (e.g., 'string', 'number')
-    if (typeof def === 'string') {
-      // Try to map string to built-in type function if possible
-      let typeKey = def.toLowerCase()
-      let typeFn = mapTypeKeyToFn(typeKey)
-      let validatorKey = typeof typeFn === 'string' ? typeFn : typeKey
-      return {
-        type: typeFn,
-        typeValidator: validators[validatorKey],
-        ...(options.coerce === false ? { coerce: false } : {})
       }
     }
     
@@ -55,34 +44,18 @@ export default function normalizeSchema(schemaDef, options) {
       let out = {}
       if (def.type) {
         // Accept type as function or string
-        let typeFn = def.type
-        let typeKey
-        if (typeof typeFn === 'function') {
-          typeKey = typeFn.name.toLowerCase()
-        }
-        else if (typeof typeFn === 'string') {
-          typeKey = typeFn.toLowerCase()
-          typeFn = mapTypeKeyToFn(typeKey)
-          typeKey = typeof typeFn === 'string' ? typeFn : typeKey
-        }
-        else {
-          typeKey = typeFn
-        }
-        out = { ...def, type: typeFn }
-        // Attach typeValidator if known
-        if (validators[typeKey]) {
-          out.typeValidator = validators[typeKey]
-        }
-        else {
-          out.typeValidator = undefined
-        }
+        let { type, validator } = getType (def.type)
+        out = { ...def, type, typeValidator: validator }
+        
         // Propagate coerce: false from global if not set on field
-        out.coerce = def.coerce === undefined && options.coerce === false ? false : true
+        out.coerce = !def.coerce && options.coerce === false ? false : true
       }
       else {
         // Recursively normalize each field
         for (const k in def) {
-          out[k] = _normalize(def[k])
+          if (k !== 'validate') {
+            out[k] = _normalize(def[k])
+          }
         }
       }
       
@@ -105,8 +78,9 @@ export default function normalizeSchema(schemaDef, options) {
       // Normalize validate to always be { validator, message }
       if (out.validate !== undefined) {
         if (Array.isArray(out.validate)) {
-          if (typeof out.validate[0] === 'function' || (typeof out.validate[0] === 'object' && typeof out.validate[0].validator === 'function')) {
-            if (typeof out.validate[0] === 'function') {
+          const type = typeof out.validate[0]
+          if (type === 'function' || (type === 'object' && type.validator === 'function')) {
+            if (type === 'function') {
               out.validate = { validator: out.validate[0], message: out.validate[1] }
             }
             else {

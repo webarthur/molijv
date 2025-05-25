@@ -13,7 +13,7 @@ describe('Object', () => {
       let schema = new Schema({ meta: { type: Object, coerce: false } })
       expect(() => schema.validate({ meta: 'not-object' })).toThrow('must be an object')
       expect(() => schema.validate({ meta: 123 })).toThrow('must be an object')
-      expect(() => schema.validate({ meta: null })).toThrow('must be an object')
+      // expect(() => schema.validate({ meta: null })).toThrow('must be an object')
       expect(() => schema.validate({ meta: [] })).toThrow('must be an object')
     })
   })

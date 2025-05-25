@@ -1,20 +1,9 @@
 // MoliJV - Mongoose Like JSON Validator
-import validationError from './src/validation-error.js'
+// import validationError from './src/validation-error.js'
 import normalizeSchema from './src/normalize.js'
+import { types } from './src/types.js'
 
 const { isArray } = Array
-
-// Int32 type constructor for schema typing
-function Int32() {}
-Int32.prototype.toString = () => 'Int32'
-
-// Decimal128 type constructor for schema typing
-function Decimal128() {}
-Decimal128.prototype.toString = () => 'Decimal128'
-
-// Double type constructor for schema typing
-function Double() {}
-Double.prototype.toString = () => 'Double'
 
 // Schema class for validation and coercion
 class Schema {
@@ -92,19 +81,32 @@ class Schema {
       validators.push(`
         // Handle primitive field schema
         const _schema = ${schemaPath}${isSchemaArray ? '[0]' : ''}
-        const path = '${path}'
+        const path = '${path}${isSchemaArray ? '[\' + i + \']' : '' }'
         let val = ${isSchemaArray ? 'item' : dataPath.replaceAll('.', '?.') }
         ${ // Type validation and coercion
-        schema.typeValidator ? `
-          const newVal = _schema.typeValidator(_schema, val, path)
-          if (_schema.coerce !== false && newVal !== val) val = newVal
+        schema.required ? `
+          if (val === undefined || val === null || (typeof val === 'string' && val.trim() === '')) {
+            // Use custom validation error
+            throw validationError({ 
+              kind: 'required', 
+              message: _schema.required.msg || _schema.message || \`Field "${path}" is required\`, 
+              path, 
+              value: val 
+            })
+          }
         ` : ''}
         ${ // Apply default if value is undefined
         schema.default !== undefined && schema.coerce ? `
           const defaultVal = _schema.default
           if (val === undefined) {
             out['${path}${isSchemaArray ? '[\' + i + \']' : ''}'] = typeof defaultVal === 'function' ? defaultVal() : defaultVal
-          } else {
+          }
+        ` : ''}
+        if (val !== undefined) {
+        ${ // Type validation and coercion
+        schema.typeValidator ? `
+          const newVal = _schema.typeValidator(_schema, val, path)
+          if (_schema.coerce !== false && newVal !== val) val = newVal
         ` : ''}
         ${ // Enum validation
         schema.enum?.values ? `
@@ -167,8 +169,7 @@ class Schema {
             out['${path}${isSchemaArray ? '[\' + i + \']' : ''}'] = val
           }
         `}
-        ${ // Apply default if value is undefined
-        schema.default !== undefined && schema.coerce ? `}` : ''}
+        }
       `)
     }
 
@@ -249,4 +250,6 @@ function expandPathsObject(obj) {
   return result
 }
 
-export { Schema, Int32, Decimal128, Double, expandPathsObject }
+const Types = types
+
+export { Schema, types, Types }

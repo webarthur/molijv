@@ -1,4 +1,5 @@
-import { Schema, Double } from '../molijv'
+import { Schema, types } from '../molijv'
+const { Double } = types
 
 describe('Double', () => {
 
@@ -16,22 +17,22 @@ describe('Double', () => {
 
     test('should throw if value is not number and coerce is false', () => {
       let schema = new Schema({ value: { type: Double, coerce: false } })
-      expect(() => schema.validate({ value: '3.14' })).toThrow('must be a finite double')
+      expect(() => schema.validate({ value: '3.14' })).toThrow('must be a double')
       // expect(() => schema.validate({ value: null })).toThrow('must be a finite double')
     })
 
     test('should throw if value is not finite', () => {
       let schema = new Schema({ value: { type: Double } })
-      expect(() => schema.validate({ value: NaN })).toThrow('must be a finite double')
-      expect(() => schema.validate({ value: Infinity })).toThrow('must be a finite double')
+      expect(() => schema.validate({ value: Infinity })).toThrow('must be a valid finite double')
     })
   })
-
+  
   describe('bad values', () => {
     test('should throw if value is not a number', () => {
       let schema = new Schema({ value: { type: Double } })
-      expect(() => schema.validate({ value: 'abc' })).toThrow('must be a finite double')
-      expect(() => schema.validate({ value: {} })).toThrow('must be a finite double')
+      expect(() => schema.validate({ value: NaN })).toThrow('must be a double')
+      expect(() => schema.validate({ value: 'abc' })).toThrow('must be a double')
+      expect(() => schema.validate({ value: {} })).toThrow('must be a double')
     })
   })
 

@@ -4,6 +4,10 @@ describe('Boolean', () => {
 
   describe('type validation', () => {
     test('should return value if valid boolean', () => {
+      let schema = new Schema({ active: Boolean })
+      expect(schema.validate({ active: false }).active).toBe(false)
+    })
+    test('should return value if valid boolean', () => {
       let schema = new Schema({ active: { type: Boolean } })
       expect(schema.validate({ active: true }).active).toBe(true)
       expect(schema.validate({ active: false }).active).toBe(false)

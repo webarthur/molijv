@@ -1,12 +1,12 @@
 {
   "name": "molijv",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Mongoose-Like JSON Schema Validator",
   "main": "./dist/molijv.cjs",
   "type": "module",
   "scripts": {
     "build": "rollup -c",
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest --verbose tests/"
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest --bail --verbose tests/"
   },
   "repository": {
     "type": "git",

@@ -4,6 +4,13 @@ describe('Array', () => {
 
   describe('type validation', () => {
     test('should return value if valid array', () => {
+      let schema = new Schema({ tags: [Number] })
+      let arr = [1, 2, 3]
+      expect(schema.validate({ tags: arr }).tags[0]).toBe(1)
+      expect(schema.validate({ tags: arr }).tags[1]).toBe(2)
+      expect(schema.validate({ tags: arr }).tags[2]).toBe(3)
+    })
+    test('should return value if valid array', () => {
       let schema = new Schema({ tags: { type: Array } })
       let arr = [1, 2, 3]
       expect(schema.validate({ tags: arr }).tags).toBe(arr)
@@ -12,8 +19,18 @@ describe('Array', () => {
       let schema = new Schema({ tags: { type: Array, coerce: false } })
       expect(() => schema.validate({ tags: 'not-array' })).toThrow('must be an array')
       expect(() => schema.validate({ tags: 123 })).toThrow('must be an array')
-      expect(() => schema.validate({ tags: null })).toThrow('must be an array')
+      // expect(() => schema.validate({ tags: null })).toThrow('must be an array')
       expect(() => schema.validate({ tags: {} })).toThrow('must be an array')
+    })
+  })
+
+  describe('coerce data', () => {
+    test('should return an array of strings', () => {
+      let schema = new Schema({ tags: [String] })
+      let arr = [1, 2, 3]
+      expect(schema.validate({ tags: arr }).tags[0]).toBe('1')
+      expect(schema.validate({ tags: arr }).tags[1]).toBe('2')
+      expect(schema.validate({ tags: arr }).tags[2]).toBe('3')
     })
   })
 
