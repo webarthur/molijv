@@ -74,17 +74,24 @@ const validators = {
           value: val
         })
       // Length checks
-      if (def.minLength !== undefined && str.length < def.minLength)
+      if (
+        def.minLength !== undefined &&
+        str.length < (def.minLength?.flag !== undefined ? def.minLength.flag : def.minLength)
+      )
         throw validationError({
           kind: 'minlength',
-          message: def.message || `Field "${path}" length must be >= ${def.minLength}`,
+          message: def.minLength?.msg || def.message || `Field "${path}" length must be >= ${def.minLength?.flag ?? def.minLength}`,
           path,
           value: str
         })
-      if (def.maxLength !== undefined && str.length > def.maxLength)
+      
+      if (
+        def.maxLength !== undefined &&
+        str.length > (def.maxLength?.flag !== undefined ? def.maxLength.flag : def.maxLength)
+      )
         throw validationError({
           kind: 'maxlength',
-          message: def.message || `Field "${path}" length must be <= ${def.maxLength}`,
+          message: def.maxLength?.msg || def.message || `Field "${path}" length must be <= ${def.maxLength?.flag ?? def.maxLength}`,
           path,
           value: str
         })
