@@ -489,7 +489,7 @@ function normalizeSchema(schemaDef, options) {
     // Handle object schema
     if (typeof def === 'object' && def !== null) {
       let out = {};
-      if (def.type) {
+      if (def.type && (typeof def.type === 'function' || typeof def.type === 'string')) {
         // Accept type as function or string
         let { type, validator } = getType (def.type);
         out = { ...def, type, typeValidator: validator };
@@ -592,6 +592,7 @@ function normalizeSchema(schemaDef, options) {
 // import validationError from './src/validation-error.js'
 
 const { isArray } = Array;
+const isObject = (val) => typeof val === 'object' && val !== null;
 
 // Schema class for validation and coercion
 class Schema {
@@ -618,51 +619,50 @@ class Schema {
       const schemaPath = path ? `schema.${path}` : 'schema';
       const dataPath = path ? `data.${path}` : 'data';
 
-      if (typeof schema === 'object' && schema !== null) {
-        // Handle array schema
-        if (isArray(schema)) {
-          // Assume single schema for all items
-          const itemSchema = schema[0];
-          validators.push(`
-            // Array validation for path: ${path}
-            let arr = ${dataPath.replaceAll('.', '?.')}
-            if (arr !== undefined) {
-              if (!Array.isArray(arr)) {
-                // Use custom validation error
-                throw validationError({ 
-                  kind: 'array', 
-                  message: 'Field "${path}" must be an array', 
-                  path: '${path}', 
-                  value: arr 
-                })
-              }
-              for (let i = 0; i < arr.length; i++) {
-                let item = arr[i]
-                let itemOut = {}
-                ${(() => {
-                  const itemValidators = [];
-                  build(itemSchema, path, itemValidators, true);
-                  return '{\n' + itemValidators.join('\n}\n\n{') + '\n}'
-                })()}
-              }
+      // Handle array schema
+      if (isArray(schema)) {
+        // Assume single schema for all items
+        const itemSchema = schema[0];
+        validators.push(`
+          // Array validation for path: ${path}
+          let arr = ${dataPath.replaceAll('.', '?.')}
+          if (arr !== undefined) {
+            if (!Array.isArray(arr)) {
+              // Use custom validation error
+              throw validationError({ 
+                kind: 'array', 
+                message: 'Field "${path}" must be an array', 
+                path: '${path}', 
+                value: arr 
+              })
             }
-          `);
-          return
-        }
-        // Handle nested object schema
-        else {
-          schema.any = true;
-          for (const key in schema) {
-            if (key === 'default') continue
-            const fieldSchema = schema[key];
-            if (typeof fieldSchema === 'object' && fieldSchema !== null) {
-              build(fieldSchema, path ? `${path}.${key}` : key, validators);
-              schema.any = false;
+            for (let i = 0; i < arr.length; i++) {
+              let item = arr[i]
+              let itemOut = {}
+              ${(() => {
+                const itemValidators = [];
+                build(itemSchema, path, itemValidators, true);
+                return '{\n' + itemValidators.join('\n}\n\n{') + '\n}'
+              })()}
             }
           }
-          if(!schema.type)
-            return
+        `);
+        return
+      }
+      
+      // Handle nested object schema
+      if (isObject(schema)) {
+        schema.any = true;
+        for (const key in schema) {
+          if (key === 'default') continue
+          const fieldSchema = schema[key];
+          if (isObject(fieldSchema)) {
+            build(fieldSchema, path ? `${path}.${key}` : key, validators);
+            schema.any = false;
+          }
         }
+        if(!schema.type || isObject(schema.type))
+          return
       }
 
       // Primitive or object field validation
@@ -692,10 +692,12 @@ class Schema {
         ` : ''}
         if (val !== undefined) {
         ${ // Type validation and coercion
-        schema.typeValidator ? `
+        schema.coerce !== false ? `
           const newVal = _schema.typeValidator(_schema, val, path)
           if (_schema.coerce !== false && newVal !== val) val = newVal
-        ` : ''}
+        ` : `
+          _schema.typeValidator(_schema, val, path)
+        `}
         ${ // Enum validation
         schema.enum?.values ? `
           const enumMsg = _schema.enum?.msg || _schema.message
@@ -753,9 +755,9 @@ class Schema {
             }
           }
         ` : `
-          if (val !== undefined) {
+          ${ schema.coerce !== false ? `
             out['${path}${isSchemaArray ? '[\' + i + \']' : ''}'] = val
-          }
+          ` : ''}
         `}
         }
       `);

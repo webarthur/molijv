@@ -1,9 +1,8 @@
 # TODO
 
-- questão undefined / null / ''
+- estudar sobre retorno, erros e coercion em mongoose e ajv
 
 - Improve required check for empty array and object
-- Create project dist
 - Create a project website
 - Async
 - Custom types

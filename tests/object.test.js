@@ -81,4 +81,11 @@ describe('Object', () => {
     // })
   })
 
+  describe('allow property named type', () => {
+    test('should allow property named type as string', () => {
+      let schema = new Schema({ type: { type: String } })
+      expect(schema.validate({ type: 'solid' }).type).toBe('solid')
+    })
+  })
+
 })

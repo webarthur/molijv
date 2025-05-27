@@ -42,7 +42,7 @@ export default function normalizeSchema(schemaDef, options) {
     // Handle object schema
     if (typeof def === 'object' && def !== null) {
       let out = {}
-      if (def.type) {
+      if (def.type && (typeof def.type === 'function' || typeof def.type === 'string')) {
         // Accept type as function or string
         let { type, validator } = getType (def.type)
         out = { ...def, type, typeValidator: validator }
