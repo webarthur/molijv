@@ -60,7 +60,7 @@ export default function normalizeSchema(schemaDef, options) {
       }
       
       // Normalize flags for required, min, max
-      for (const key of ['required', 'min', 'max']) {
+      for (const key of ['required', 'min', 'max', 'maxLength', 'minLength']) {
         if (out[key] !== undefined) {
           out[key] = Array.isArray(out[key])
             ? { flag: out[key][0], msg: out[key][1] }

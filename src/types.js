@@ -431,5 +431,26 @@ for (const v in validators) {
   types[validators[v].type.name] = validators[v].type.name
 }
 
+// types.add = (name, options = {}) => {
+//   if (typeof name !== 'string') {
+//     throw new Error('Type name must be a string')
+//   }
+//   if (validators[name]) {
+//     throw new Error(`Type "${name}" already exists`)
+//   }
+//   if (!options.validator || typeof options.validator !== 'function') {
+//     throw new Error('Custom type must have a validator function')
+//   }
+//   validators[name] = {
+//     type: options.type || name,
+//     alias: options.alias || [name.toLowerCase()],
+//     validator: options.validator
+//   }
+//   types[options.type || name] = options.type || name
+//   if (options.alias) {
+//     alias[options.alias] = validators[name]
+//   }
+// }
+
 export default types
 export { types, validators, alias as validatorsAlias }
