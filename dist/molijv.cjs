@@ -457,6 +457,28 @@ for (const v in validators) {
   types[validators[v].type.name] = validators[v].type.name;
 }
 
+types.add = (name, options = {}) => {
+  if (typeof name !== 'string' || !name) {
+    throw new Error('Type name must be a non-empty string')
+  }
+  if (types[name]) {
+    throw new Error(`Type "${name}" already exists`)
+  }
+  if (!options.validator || typeof options.validator !== 'function') {
+    throw new Error(`Type "${name}" must have a validator function`)
+  }
+  types[name] = options.type || name;
+  validators[name] = {
+    type: types[name],
+    validator: options.validator,
+    coerce: options.coerce !== false,
+    message: options.message || `Field must be a valid ${name}`
+  };
+  if (options.alias) {
+    alias[options.alias] = validators[name];
+  }
+};
+
 function getType (typeName) {
   let key;
   if (typeof typeName === 'function') {
