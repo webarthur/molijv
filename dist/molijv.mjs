@@ -701,9 +701,16 @@ class Schema {
         const _schema = ${schemaPath}${isSchemaArray ? '[0]' : ''}
         const path = '${path}${isSchemaArray ? '[\' + i + \']' : '' }'
         let val = ${isSchemaArray ? 'item' : dataPath.replaceAll('.', '?.') }
-        ${ // Type validation and coercion
-        schema.required ? `
-          if (val === undefined || val === null || (typeof val === 'string' && val.trim() === '')) {
+        // Required validation
+        ${
+          schema.required ? `
+          if ( ${ // If partial, only validate required if val is not undefined
+            options.partial
+              ? 'val !== undefined && (val === null || (typeof val === \'string\' && val.trim() === \'\'))'
+              // Otherwise, validate required as usual
+              : 'val === undefined || val === null || (typeof val === \'string\' && val.trim() === \'\')'
+          } )
+          {
             // Use custom validation error
             throw validationError({ 
               kind: 'required', 
@@ -712,7 +719,9 @@ class Schema {
               value: val 
             })
           }
-        ` : ''}
+        `
+            : ''
+        }
         ${ // Apply default if value is undefined
         schema.default !== undefined && schema.coerce ? `
           const defaultVal = _schema.default

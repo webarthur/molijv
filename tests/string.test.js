@@ -140,5 +140,21 @@ describe('String', () => {
     })
   })
 
+  describe('partial', () => {
+    test('should not throw if required fields are missing and schema is partial', () => {
+      // Schema com dois campos required
+      let schema = new Schema(
+        { 
+          name: { type: String, required: true }, 
+          surname: { type: String, required: true } 
+        }, 
+        { partial: true }
+      )
+      // Dados sem os campos required
+      expect(() => schema.validate({})).not.toThrow()
+      expect(schema.validate({})).toEqual({})
+    })
+  })
+
 })
 
