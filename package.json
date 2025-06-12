@@ -1,6 +1,6 @@
 {
   "name": "molijv",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "description": "Mongoose-Like JSON Schema Validator",
   "main": "./dist/molijv.cjs",
   "type": "module",

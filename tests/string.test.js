@@ -50,6 +50,10 @@ describe('String', () => {
       let schema = new Schema({ name: { type: String } })
       expect(() => schema.validate({ name: {} })).toThrow('string')
     })
+    test('should throw if value is an object instead of string', () => {
+      let schema = new Schema({ name: { type: String } })
+      expect(() => schema.validate({ name: { foo: 'bar' } })).toThrow('string')
+    })
   })
 
   describe('default', () => {

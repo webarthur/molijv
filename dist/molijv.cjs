@@ -61,11 +61,8 @@ const validators = {
         if (type === 'number' || type === 'boolean' || type === 'bigint') {
           str = String(str);
         }
-        // Apply string transformations if enabled
-        if (def.trim) str = str.trim();
-        if (def.lowercase) str = str.toLowerCase();
-        if (def.uppercase) str = str.toUpperCase();
       }
+      // Validate type after coercion
       if (typeof str !== 'string')
         throw validationError({
           kind: 'string',
@@ -73,6 +70,12 @@ const validators = {
           path,
           value: val
         })
+      // Apply string transformations if enabled
+      if (def.coerce !== false) {
+        if (def.trim) str = str.trim();
+        if (def.lowercase) str = str.toLowerCase();
+        if (def.uppercase) str = str.toUpperCase();
+      }
       // Length checks
       if (
         def.minLength !== undefined &&
