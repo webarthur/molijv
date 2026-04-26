@@ -1,7 +1,7 @@
 {
   "name": "molijv",
-  "version": "1.0.14",
-  "description": "Mongoose-Like JSON Schema Validator",
+  "version": "1.1.0",
+  "description": "Mongoose-like JSON Schema Validator with Zod-inspired transformations",
   "main": "./dist/molijv.cjs",
   "type": "module",
   "scripts": {
@@ -22,7 +22,13 @@
     "json-schema-validator",
     "json-schema-validation",
     "mongoose",
-    "mongoose-like"
+    "mongoose-like",
+    "zod-like",
+    "schema-validation",
+    "data-validation",
+    "type-validation",
+    "transform",
+    "coercion"
   ],
   "exports": {
     "import": "./dist/molijv.mjs",

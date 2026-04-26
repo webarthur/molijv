@@ -1,4 +1,5 @@
 import { validatorsAlias } from './types.js'
+import { validateRegexPattern, validateFieldNames } from './utils.js'
 
 function getType (typeName) {
   let key
@@ -20,6 +21,9 @@ function getType (typeName) {
 
 // Normalize schema definition to internal format, applying options
 export default function normalizeSchema(schemaDef, options) {
+  // Validate field names to prevent NoSQL injection
+  validateFieldNames(schemaDef)
+  
   // Recursively normalize schema definitions
   const _normalize = (def) => {
     // Handle type as function (e.g., String, Number)
@@ -53,7 +57,7 @@ export default function normalizeSchema(schemaDef, options) {
       else {
         // Recursively normalize each field
         for (const k in def) {
-          if (k !== 'validate') {
+          if (k !== 'validate' && k !== 'transform') {
             out[k] = _normalize(def[k])
           }
         }
@@ -73,6 +77,10 @@ export default function normalizeSchema(schemaDef, options) {
         out.match = Array.isArray(out.match)
           ? { value: out.match[0], msg: out.match[1] }
           : { value: out.match, msg: undefined }
+        // Validate regex pattern
+        if (typeof out.match.value === 'string') {
+          validateRegexPattern(out.match.value)
+        }
       }
       
       // Normalize validate to always be { validator, message }
@@ -104,11 +112,30 @@ export default function normalizeSchema(schemaDef, options) {
       
       // Normalize enum to always be { values, msg }
       if (out.enum !== undefined) {
+        let enumValues
         if (Array.isArray(out.enum) && Array.isArray(out.enum[0])) {
-          out.enum = { values: out.enum[0], msg: out.enum[1] }
+          enumValues = out.enum[0]
+        } else {
+          enumValues = Array.isArray(out.enum) ? out.enum : [out.enum]
         }
-        else {
-          out.enum = { values: out.enum, msg: undefined }
+        // Validate enum values are acceptable types
+        for (const val of enumValues) {
+          const type = typeof val
+          // Allow primitives, Date objects, and null
+          if (type !== 'string' && type !== 'number' && type !== 'boolean' && val !== null && !(val instanceof Date)) {
+            throw new Error('Enum values must be primitive types or Date objects')
+          }
+        }
+        out.enum = { 
+          values: enumValues, 
+          msg: Array.isArray(out.enum) && Array.isArray(out.enum[0]) ? out.enum[1] : undefined 
+        }
+      }
+      
+      // Validate and preserve transform function
+      if (out.transform !== undefined) {
+        if (typeof out.transform !== 'function') {
+          throw new Error('transform must be a function')
         }
       }
       
