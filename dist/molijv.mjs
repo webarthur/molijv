@@ -477,6 +477,113 @@ types.add = (name, options = {}) => {
   }
 };
 
+const MAX_REGEX_LENGTH = 1024;
+
+/**
+ * Escape special characters in strings for safe code generation
+ * 
+ * @param {string} str - String to escape
+ * @returns {string} Escaped string safe for template literals
+ */
+const escapeString = (str) => {
+  return str.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$')
+};
+
+/**
+ * Validate regex pattern to prevent ReDoS
+ * 
+ * @param {string|RegExp} pattern - Pattern to validate
+ * @throws {Error} If pattern is vulnerable to ReDoS
+ */
+const validateRegexPattern = (pattern) => {
+  if (typeof pattern === 'string') {
+    if (pattern.length > MAX_REGEX_LENGTH) {
+      throw new Error('Regex pattern exceeds maximum length')
+    }
+    // Detect common ReDoS patterns
+    const redosPatterns = [
+      /(\+|\*)\+/,           // Nested quantifiers
+      /(\{.*?\}){2,}/,       // Multiple quantifiers
+      /\(.*?\|.*?\)\+/,      // Alternation with quantifiers
+    ];
+    for (const redosPattern of redosPatterns) {
+      if (redosPattern.test(pattern)) {
+        throw new Error('Regex pattern appears to be vulnerable to ReDoS attacks')
+      }
+    }
+  }
+  return true
+};
+
+/**
+ * Deep clone a schema definition while preserving functions
+ * 
+ * Recursively clones objects and arrays but passes through functions
+ * and primitive values unchanged. Limits recursion depth to 10 levels
+ * to prevent infinite recursion.
+ * 
+ * @param {*} obj - Object to clone
+ * @param {number} [depth=0] - Current recursion depth
+ * @returns {*} Cloned object with functions preserved
+ * 
+ * @example
+ * const schema = { name: { type: String, transform: fn } }
+ * const cloned = cloneSchemaDef(schema)
+ * // fn is still a function in cloned, not stringified
+ */
+const cloneSchemaDef = (obj, depth = 0) => {
+  if (depth > 10) return obj
+
+  const cloned = {};
+  for (const key in obj) {
+    // Skip prototype properties
+    if (!Object.prototype.hasOwnProperty.call(obj, key)) continue
+    
+    const val = obj[key];
+    if (val === null || typeof val !== 'object') {
+      cloned[key] = val;
+    } else if (Array.isArray(val)) {
+      cloned[key] = val.map(item =>
+        typeof item === 'object' && item !== null
+          ? cloneSchemaDef(item, depth + 1)
+          : item
+      );
+    } else {
+      cloned[key] = cloneSchemaDef(val, depth + 1);
+    }
+  }
+  return cloned
+};
+
+/**
+ * Validate field names to prevent NoSQL injection
+ * 
+ * @param {*} def - Schema definition to validate
+ * @param {string} [path=''] - Current path in nested objects
+ * @throws {Error} If field name is invalid
+ */
+const validateFieldNames = (def, path = '') => {
+  if (typeof def !== 'object' || def === null) return
+  
+  for (const key in def) {
+    if (!Object.prototype.hasOwnProperty.call(def, key)) continue
+    
+    // Reject field names starting with $ (NoSQL operators)
+    if (/^[$]/.test(key)) {
+      throw new Error(`Field name "${key}" is not allowed - names starting with $ are reserved`)
+    }
+    // Limit field name length
+    if (key.length > 256) {
+      throw new Error(`Field name exceeds maximum length of 256 characters`)
+    }
+    
+    const fieldDef = def[key];
+    if (typeof fieldDef === 'object' && fieldDef !== null && !Array.isArray(fieldDef)) {
+      validateFieldNames(fieldDef, path ? `${path}.${key}` : key);
+    }
+  }
+};
+
 function getType (typeName) {
   let key;
   if (typeof typeName === 'function') {
@@ -497,6 +604,9 @@ function getType (typeName) {
 
 // Normalize schema definition to internal format, applying options
 function normalizeSchema(schemaDef, options) {
+  // Validate field names to prevent NoSQL injection
+  validateFieldNames(schemaDef);
+  
   // Recursively normalize schema definitions
   const _normalize = (def) => {
     // Handle type as function (e.g., String, Number)
@@ -530,7 +640,7 @@ function normalizeSchema(schemaDef, options) {
       else {
         // Recursively normalize each field
         for (const k in def) {
-          if (k !== 'validate') {
+          if (k !== 'validate' && k !== 'transform') {
             out[k] = _normalize(def[k]);
           }
         }
@@ -550,6 +660,10 @@ function normalizeSchema(schemaDef, options) {
         out.match = Array.isArray(out.match)
           ? { value: out.match[0], msg: out.match[1] }
           : { value: out.match, msg: undefined };
+        // Validate regex pattern
+        if (typeof out.match.value === 'string') {
+          validateRegexPattern(out.match.value);
+        }
       }
       
       // Normalize validate to always be { validator, message }
@@ -581,11 +695,30 @@ function normalizeSchema(schemaDef, options) {
       
       // Normalize enum to always be { values, msg }
       if (out.enum !== undefined) {
+        let enumValues;
         if (Array.isArray(out.enum) && Array.isArray(out.enum[0])) {
-          out.enum = { values: out.enum[0], msg: out.enum[1] };
+          enumValues = out.enum[0];
+        } else {
+          enumValues = Array.isArray(out.enum) ? out.enum : [out.enum];
         }
-        else {
-          out.enum = { values: out.enum, msg: undefined };
+        // Validate enum values are acceptable types
+        for (const val of enumValues) {
+          const type = typeof val;
+          // Allow primitives, Date objects, and null
+          if (type !== 'string' && type !== 'number' && type !== 'boolean' && val !== null && !(val instanceof Date)) {
+            throw new Error('Enum values must be primitive types or Date objects')
+          }
+        }
+        out.enum = { 
+          values: enumValues, 
+          msg: Array.isArray(out.enum) && Array.isArray(out.enum[0]) ? out.enum[1] : undefined 
+        };
+      }
+      
+      // Validate and preserve transform function
+      if (out.transform !== undefined) {
+        if (typeof out.transform !== 'function') {
+          throw new Error('transform must be a function')
         }
       }
       
@@ -618,33 +751,271 @@ function normalizeSchema(schemaDef, options) {
   return _normalize(schemaDef)
 }
 
-// MoliJV - Mongoose Like JSON Validator
-// import validationError from './src/validation-error.js'
-
 const { isArray } = Array;
 const isObject = (val) => typeof val === 'object' && val !== null;
 
-// Schema class for validation and coercion
+/**
+ * Schema class for validation and coercion
+ * 
+ * @example
+ * const schema = new Schema({
+ *   name: { type: String, required: true },
+ *   age: { type: Number }
+ * })
+ * const data = schema.parse({ name: 'John', age: 30 })
+ */
 class Schema {
+  
+  /**
+   * Creates a new Schema instance
+   * 
+   * @param {Object} schemaDef - Schema definition
+   * @param {Object} [options={}] - Configuration options
+   * @param {boolean} [options.coerce=true] - Enable type coercion
+   */
   constructor(schemaDef, options = {}) {
     this.schemaDef = schemaDef;
+
     // Merge user options with default
     this.options = { coerce: true, ...options };
+
     // Normalize schema for internal use
     this._normalizedSchema = normalizeSchema(schemaDef, this.options);
+
     // Precompile validator for performance
     this._validatorFn = this._compileValidator(this._normalizedSchema);
   }
 
   // Validate input data against schema
+  /**
+   * Validate input data against schema
+   * 
+   * @param {*} data - Data to validate
+   * @returns {*} Validated and coerced data
+   * @throws {Error} Validation error with error details
+   */
   validate(data) {
     return this._validatorFn(this._normalizedSchema, data)
   }
 
+  /**
+   * Get the shape (definition) of the schema
+   * 
+   * @type {Object}
+   * @readonly
+   * @returns {Object} Schema definition
+   */
+  get shape() {
+    return this.schemaDef
+  }
+
+  /**
+   * Parse and validate data (alias for validate)
+   * 
+   * @param {*} data - Data to validate
+   * @returns {*} Validated and coerced data
+   * @throws {Error} Validation error with error details
+   */
+  parse(data) {
+    return this.validate(data)
+  }
+
+  /**
+   * Safely validate data without throwing
+   * 
+   * @param {*} data - Data to validate
+   * @returns {Object} Result object with success flag, data, and error
+   * @returns {boolean} result.success - Whether validation succeeded
+   * @returns {*} result.data - Validated data if successful, undefined if failed
+   * @returns {Error} result.error - Error object if validation failed, undefined if successful
+   * 
+   * @example
+   * const result = schema.safeValidate({ name: 'John' })
+   * if (result.success) {
+   *   console.log(result.data)
+   * } else {
+   *   console.log(result.error.message)
+   * }
+   */
+  safeValidate(data) {
+    try {
+      const data_result = this.validate(data);
+      return { success: true, data: data_result }
+    } 
+    catch (error) {
+      return { success: false, error }
+    }
+  }
+
+  /**
+   * Safely parse and validate data without throwing (alias for safeValidate)
+   * 
+   * @param {*} data - Data to validate
+   * @returns {Object} Result object with success flag, data, and error
+   * 
+   * @example
+   * const result = schema.safeParse({ name: 'John' })
+   * if (result.success) {
+   *   console.log(result.data)
+   * } else {
+   *   console.log(result.error.message)
+   * }
+   */
+  safeParse(data) {
+    return this.safeValidate(data)
+  }
+
+  /**
+   * Extend schema with additional fields
+   * Returns a new Schema without mutating the original
+   * 
+   * @param {Object} fields - Fields to add or override
+   * @returns {Schema} New extended schema
+   * 
+   * @example
+   * const extended = schema.extend({ email: { type: String } })
+   */
+  extend(fields) {
+    const cloned = cloneSchemaDef(this.schemaDef);
+    const extended = { ...cloned, ...fields };
+    return new Schema(extended, this.options)
+  }
+
+  /**
+   * Make all or specific fields optional
+   * Returns a new Schema without mutating the original
+   * 
+   * @param {string[]} [fields] - Field names to make optional. If omitted, all fields become optional
+   * @returns {Schema} New partial schema
+   * 
+   * @example
+   * schema.partial() // all fields optional
+   * schema.partial(['age']) // only age optional
+   */
+  partial(fields) {
+    const cloned = cloneSchemaDef(this.schemaDef);
+    
+    if (!fields) {
+      for (const key in cloned) {
+        if (cloned[key]?.type) {
+          cloned[key] = { ...cloned[key], required: false };
+        }
+      }
+    } 
+    else {
+      fields.forEach(field => {
+        if (cloned[field]?.type) {
+          cloned[field] = { ...cloned[field], required: false };
+        }
+      });
+    }
+    
+    return new Schema(cloned, this.options)
+  }
+
+  /**
+   * Make all or specific fields required
+   * Returns a new Schema without mutating the original
+   * 
+   * @param {string[]} [fields] - Field names to make required. If omitted, all fields become required
+   * @returns {Schema} New schema with required fields
+   * 
+   * @example
+   * schema.require() // all fields required
+   * schema.require(['name']) // only name required
+   */
+  require(fields) {
+    const cloned = cloneSchemaDef(this.schemaDef);
+    
+    if (!fields) {
+      for (const key in cloned) {
+        if (cloned[key]?.type) {
+          cloned[key] = { ...cloned[key], required: true };
+        }
+      }
+    } 
+    else {
+      fields.forEach(field => {
+        if (cloned[field]?.type) {
+          cloned[field] = { ...cloned[field], required: true };
+        }
+      });
+    }
+    
+    return new Schema(cloned, this.options)
+  }
+
+  /**
+   * Select only specific fields from schema
+   * Returns a new Schema without mutating the original
+   * 
+   * @param {string[]} fields - Field names to keep
+   * @returns {Schema} New schema with only selected fields
+   * 
+   * @example
+   * schema.pick(['name', 'email'])
+   */
+  pick(fields) {
+    const picked = {};
+    fields.forEach(field => {
+      if (field in this.schemaDef) {
+        picked[field] = cloneSchemaDef(this.schemaDef[field]);
+      }
+    });
+    return new Schema(picked, this.options)
+  }
+
+  /**
+   * Remove specific fields from schema
+   * Returns a new Schema without mutating the original
+   * 
+   * @param {string[]} fields - Field names to remove
+   * @returns {Schema} New schema without selected fields
+   * 
+   * @example
+   * schema.omit(['password', 'createdAt'])
+   */
+  omit(fields) {
+    const cloned = cloneSchemaDef(this.schemaDef);
+    fields.forEach(field => delete cloned[field]);
+    return new Schema(cloned, this.options)
+  }
+
+  /**
+   * Merge with another schema
+   * Returns a new Schema combining fields from both schemas
+   * Fields from the other schema override fields in this schema
+   * 
+   * @param {Schema} other - Another Schema instance to merge
+   * @returns {Schema} New merged schema
+   * 
+   * @example
+   * const schema1 = new Schema({ name: String })
+   * const schema2 = new Schema({ age: Number })
+   * const merged = schema1.merge(schema2)
+   */
+  merge(other) {
+    if (!(other instanceof Schema)) {
+      throw new TypeError('merge() expects a Schema instance')
+    }
+    const cloned = cloneSchemaDef(this.schemaDef);
+    const otherCloned = cloneSchemaDef(other.schemaDef);
+    const merged = { ...cloned, ...otherCloned };
+    return new Schema(merged, this.options)
+  }
+
+  /**
+   * Compile validator function for the schema
+   * Generates optimized validation code for performance
+   * 
+   * @private
+   * @param {Object} schema - Normalized schema
+   * @returns {Function} Compiled validator function
+   */
   _compileValidator(schema) {
     const options = this.options;
     const validators = [];
-    
+
     function build(schema, path = '', validators, isSchemaArray = false) {
       const schemaPath = path ? `schema.${path}` : 'schema';
       const dataPath = path ? `data.${path}` : 'data';
@@ -654,15 +1025,15 @@ class Schema {
         // Assume single schema for all items
         const itemSchema = schema[0];
         validators.push(`
-          // Array validation for path: ${path}
+          // Array validation for path: ${escapeString(path)}
           let arr = ${dataPath.replaceAll('.', '?.')}
           if (arr !== undefined) {
             if (!Array.isArray(arr)) {
               // Use custom validation error
               throw validationError({ 
                 kind: 'array', 
-                message: 'Field "${path}" must be an array', 
-                path: '${path}', 
+                message: 'Field "${escapeString(path)}" must be an array', 
+                path: '${escapeString(path)}', 
                 value: arr 
               })
             }
@@ -675,23 +1046,37 @@ class Schema {
                 return '{\n' + itemValidators.join('\n}\n\n{') + '\n}'
               })()}
             }
+            // Extract coerced array items from out back into arr
+            for (let i = 0; i < arr.length; i++) {
+              const itemKey = '${escapeString(path)}[' + i + ']'
+              if (out[itemKey] !== undefined) {
+                arr[i] = out[itemKey]
+                delete out[itemKey]
+              }
+            }
+            out['${escapeString(path)}'] = arr
           }
         `);
         return
       }
-      
+
       // Handle nested object schema
       if (isObject(schema)) {
-        schema.any = true;
+        const hasAny = Object.prototype.hasOwnProperty.call(schema, 'any');
+        if (!hasAny) {
+          Object.defineProperty(schema, 'any', { value: true, writable: true, configurable: true });
+        } else {
+          schema.any = true;
+        }
         for (const key in schema) {
-          if (key === 'default') continue
+          if (key === 'default' || !Object.prototype.hasOwnProperty.call(schema, key)) continue
           const fieldSchema = schema[key];
           if (isObject(fieldSchema)) {
             build(fieldSchema, path ? `${path}.${key}` : key, validators);
             schema.any = false;
           }
         }
-        if(!schema.type || isObject(schema.type))
+        if (!schema.type || isObject(schema.type))
           return
       }
 
@@ -699,11 +1084,12 @@ class Schema {
       validators.push(`
         // Handle primitive field schema
         const _schema = ${schemaPath}${isSchemaArray ? '[0]' : ''}
-        const path = '${path}${isSchemaArray ? '[\' + i + \']' : '' }'
+        const path = '${escapeString(path)}${isSchemaArray ? '[\' + i + \']' : '' }'
         let val = ${isSchemaArray ? 'item' : dataPath.replaceAll('.', '?.') }
         // Required validation
         ${
-          schema.required ? `
+          schema.required?.flag
+            ? `
           if ( ${ // If partial, only validate required if val is not undefined
             options.partial
               ? 'val !== undefined && (val === null || (typeof val === \'string\' && val.trim() === \'\'))'
@@ -714,7 +1100,7 @@ class Schema {
             // Use custom validation error
             throw validationError({ 
               kind: 'required', 
-              message: _schema.required.msg || _schema.message || \`Field "${path}" is required\`, 
+              message: _schema.required.msg || _schema.message || \`Field "\${path}" is required\`, 
               path, 
               value: val 
             })
@@ -723,80 +1109,109 @@ class Schema {
             : ''
         }
         ${ // Apply default if value is undefined
-        schema.default !== undefined && schema.coerce ? `
+        schema.default !== undefined && schema.coerce
+          ? `
           const defaultVal = _schema.default
           if (val === undefined) {
-            out['${path}${isSchemaArray ? '[\' + i + \']' : ''}'] = typeof defaultVal === 'function' ? defaultVal() : defaultVal
+            out['${escapeString(path)}${isSchemaArray ? '[\' + i + \']' : ''}'] = typeof defaultVal === 'function' ? defaultVal() : defaultVal
           }
-        ` : ''}
+        `
+          : ''}
         if (val !== undefined) {
         ${ // Type validation and coercion
-        schema.coerce !== false ? `
+        schema.coerce !== false
+          ? `
           const newVal = _schema.typeValidator(_schema, val, path)
           if (_schema.coerce !== false && newVal !== val) val = newVal
-        ` : `
+        `
+          : `
           _schema.typeValidator(_schema, val, path)
         `}
         ${ // Enum validation
-        schema.enum?.values ? `
+        schema.enum?.values
+          ? `
           const enumMsg = _schema.enum?.msg || _schema.message
           const enumSet = new Set(_schema.enum.values)
           if (enumSet && !enumSet.has(val)) {
             // Use custom validation error
             throw validationError({ 
               kind: 'enum', 
-              message: enumMsg || \`Field "${path}" must be one of: \${[...enumSet].join(', ')}\`, 
+              message: enumMsg || \`Field "\${path}" must be one of: \${[...enumSet].join(', ')}\`, 
               path, 
               value: val 
             })
           }
-        ` : ''}
+        `
+          : ''}
         ${ // Pattern match validation
-        schema.match?.value ? `
+        schema.match?.value
+          ? `
           const matchMsg = _schema.match?.msg || _schema.message
-          const matchVal = _schema.match?.value instanceof RegExp ? _schema.match.value : (_schema.match?.value ? new RegExp(_schema.match.value) : undefined)
+          const matchVal = _schema.match?.value instanceof RegExp ? _schema.match.value : (_schema.match?.value ? (() => {
+            try {
+              return new RegExp(_schema.match.value)
+            } catch (e) {
+              throw new Error('Invalid regex pattern')
+            }
+          })() : undefined)
           if (matchVal && !matchVal.test(val)) {
             // Use custom validation error
             throw validationError({ 
               kind: 'match', 
-              message: matchMsg || \`Field "${path}" does not match required pattern\`, 
+              message: matchMsg || \`Field "\${path}" does not match required pattern\`, 
               path, 
               value: val 
             })
           }
-        ` : ''}
+        `
+          : ''}
         ${ // Custom validator function
-        schema.validate?.validator ? `
+        schema.validate?.validator
+          ? `
           const validateMsg = _schema.validate?.message || _schema.message
           const customValidator = _schema.validate?.validator
           if (customValidator && !customValidator(val)) {
             // Use custom validation error
             throw validationError({ 
               kind: 'user', 
-              message: validateMsg || \`Field "${path}" failed custom validation\`, 
+              message: validateMsg || \`Field "\${path}" failed custom validation\`, 
               path, 
               value: val 
             })
           }
-        ` : ''}
+        `
+          : ''}
+        ${ // Apply transform function if present
+        schema.transform
+          ? `
+          if (typeof _schema.transform === 'function') {
+            val = _schema.transform(val)
+          }
+        `
+          : ''}
         // If val is an object, filter only fields defined in the schema
-        ${ schema.type?.name === 'Object' || schema.type === undefined ? `
+        ${
+          (schema.type?.name === 'Object' || schema.type === undefined) && !isArray(schema.type)
+            ? `
           for (const k in _schema) {
             if (val !== undefined && val !== null && val[k] === undefined) continue
             if (val !== undefined && val !== null && _schema.any) {
-              out['${path}.'+k] = val[k]
+              out['${escapeString(path)}.'+k] = val[k]
               delete val[k]
             }
           }
           if (_schema.any) {
             for (const k in val) {
-              out['${path}.'+k] = val[k]
+              out['${escapeString(path)}.'+k] = val[k]
             }
           }
-        ` : `
-          ${ schema.coerce !== false ? `
-            out['${path}${isSchemaArray ? '[\' + i + \']' : ''}'] = val
-          ` : ''}
+        `
+            : `
+          ${schema.coerce !== false
+            ? `
+            out['${escapeString(path)}${isSchemaArray ? '[\' + i + \']' : ''}'] = val
+          `
+            : ''}
         `}
         }
       `);
@@ -833,20 +1248,17 @@ class Schema {
       return options.coerce === false ? out : expandPathsObject(out)
     }
   }
-
 }
 
 // Utilitário para transformar objeto de paths em objeto real aninhado
 function expandPathsObject(obj) {
   let result = {};
-  for (let key in obj)
-  {
+  for (let key in obj) {
     let value = obj[key];
     let parts = [];
     let regex = /([^[.\]]+)|\[(\d+)\]/g;
     let match;
-    while ((match = regex.exec(key)))
-    {
+    while ((match = regex.exec(key))) {
       if (match[1] !== undefined)
         parts.push(match[1]);
       else if (match[2] !== undefined)
@@ -854,17 +1266,14 @@ function expandPathsObject(obj) {
     }
 
     let curr = result;
-    for (let i = 0; i < parts.length; i++)
-    {
+    for (let i = 0; i < parts.length; i++) {
       let part = parts[i];
       let nextPart = parts[i + 1];
-      if (i === parts.length - 1)
-      {
+      if (i === parts.length - 1) {
         curr[part] = value;
       }
       else {
-        if (typeof nextPart === 'number')
-        {
+        if (typeof nextPart === 'number') {
           if (!Array.isArray(curr[part]))
             curr[part] = [];
         }
@@ -878,6 +1287,9 @@ function expandPathsObject(obj) {
   }
   return result
 }
+
+// MoliJV - Mongoose Like JSON Validator
+// import validationError from './src/validation-error.js'
 
 const Types = types;
 
