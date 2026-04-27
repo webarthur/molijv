@@ -50,6 +50,19 @@ describe('pick()', () => {
     expect(() => result.parse({})).not.toThrow()
   })
 
+  test('pick(true) keeps all fields on a new Schema', () => {
+    const schema = new Schema({
+      name: { type: String },
+      age: { type: Number }
+    })
+
+    const pickedSchema = schema.pick(true)
+    expect(pickedSchema).not.toBe(schema)
+    const result = pickedSchema.parse({ name: 'Arthur', age: 25 })
+    expect(result.name).toBe('Arthur')
+    expect(result.age).toBe(25)
+  })
+
   test('should ignore fields not in original schema', () => {
     const schema = new Schema({
       name: { type: String },

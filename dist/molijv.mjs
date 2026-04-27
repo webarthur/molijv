@@ -949,13 +949,17 @@ class Schema {
    * Select only specific fields from schema
    * Returns a new Schema without mutating the original
    * 
-   * @param {string[]} fields - Field names to keep
+   * @param {string[]|true} fields - Field names to keep, or `true` to keep all fields (cloned schema)
    * @returns {Schema} New schema with only selected fields
    * 
    * @example
    * schema.pick(['name', 'email'])
+   * schema.pick(true) // same keys as original, new Schema instance
    */
   pick(fields) {
+    if (fields === true) {
+      return new Schema(cloneSchemaDef(this.schemaDef), this.options)
+    }
     const picked = {};
     fields.forEach(field => {
       if (field in this.schemaDef) {
