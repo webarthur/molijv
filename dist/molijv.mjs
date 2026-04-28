@@ -533,24 +533,17 @@ const validateRegexPattern = (pattern) => {
  */
 const cloneSchemaDef = (obj, depth = 0) => {
   if (depth > 10) return obj
+  if (obj === null || typeof obj !== 'object') {
+    return obj
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(item => cloneSchemaDef(item, depth + 1))
+  }
 
   const cloned = {};
   for (const key in obj) {
-    // Skip prototype properties
     if (!Object.prototype.hasOwnProperty.call(obj, key)) continue
-    
-    const val = obj[key];
-    if (val === null || typeof val !== 'object') {
-      cloned[key] = val;
-    } else if (Array.isArray(val)) {
-      cloned[key] = val.map(item =>
-        typeof item === 'object' && item !== null
-          ? cloneSchemaDef(item, depth + 1)
-          : item
-      );
-    } else {
-      cloned[key] = cloneSchemaDef(val, depth + 1);
-    }
+    cloned[key] = cloneSchemaDef(obj[key], depth + 1);
   }
   return cloned
 };
@@ -612,8 +605,7 @@ function normalizeSchema(schemaDef, options) {
     // Handle type as function (e.g., String, Number)
     // or type as string (e.g., 'string', 'number')
     if (typeof def === 'function' || typeof def === 'string') {
-      // Use function name lowercased as key for validator
-      let { type, validator } = getType (def.name);
+      let { type, validator } = getType(def);
       return { 
         type, 
         typeValidator: validator,

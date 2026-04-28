@@ -29,8 +29,7 @@ export default function normalizeSchema(schemaDef, options) {
     // Handle type as function (e.g., String, Number)
     // or type as string (e.g., 'string', 'number')
     if (typeof def === 'function' || typeof def === 'string') {
-      // Use function name lowercased as key for validator
-      let { type, validator } = getType (def.name)
+      let { type, validator } = getType(def)
       return { 
         type, 
         typeValidator: validator,
