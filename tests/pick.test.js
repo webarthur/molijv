@@ -50,6 +50,32 @@ describe('pick()', () => {
     expect(() => result.parse({})).not.toThrow()
   })
 
+  test('pick(string) selects one field', () => {
+    const schema = new Schema({
+      name: { type: String },
+      age: { type: Number }
+    })
+
+    const pickedSchema = schema.pick('name')
+    const result = pickedSchema.parse({ name: 'Arthur', age: 25 })
+    expect(result.name).toBe('Arthur')
+    expect(result.age).toBeUndefined()
+  })
+
+  test('pick(object map) selects keys with truthy values', () => {
+    const schema = new Schema({
+      name: { type: String },
+      age: { type: Number },
+      email: { type: String }
+    })
+
+    const pickedSchema = schema.pick({ name: 1, age: 0, email: true })
+    const result = pickedSchema.parse({ name: 'Arthur', age: 25, email: 'a@b.co' })
+    expect(result.name).toBe('Arthur')
+    expect(result.email).toBe('a@b.co')
+    expect(result.age).toBeUndefined()
+  })
+
   test('pick(true) keeps all fields on a new Schema', () => {
     const schema = new Schema({
       name: { type: String },

@@ -5,6 +5,27 @@ const { isArray } = Array
 const isObject = (val) => typeof val === 'object' && val !== null
 
 /**
+ * @param {string|string[]|Record<string, unknown>} fields
+ * @returns {string[]}
+ */
+function normalizeSelectedFields(fields) {
+  if (isArray(fields)) return fields
+  if (typeof fields === 'string') return [fields]
+  if (isObject(fields)) {
+    const keys = []
+    for (const key in fields) {
+      if (Object.prototype.hasOwnProperty.call(fields, key) && fields[key]) {
+        keys.push(key)
+      }
+    }
+    return keys
+  }
+  throw new TypeError(
+    'Expected a string, string[], or an object mapping field names to truthy values'
+  )
+}
+
+/**
  * Schema class for validation and coercion
  * 
  * @example
@@ -135,12 +156,14 @@ class Schema {
    * Make all or specific fields optional
    * Returns a new Schema without mutating the original
    * 
-   * @param {string[]} [fields] - Field names to make optional. If omitted, all fields become optional
+   * @param {string[]|string|Record<string, unknown>} [fields] - Field names to make optional. If omitted, all fields become optional
    * @returns {Schema} New partial schema
    * 
    * @example
    * schema.partial() // all fields optional
    * schema.partial(['age']) // only age optional
+   * schema.partial('age')
+   * schema.partial({ name: 1, age: true })
    */
   partial(fields) {
     const cloned = cloneSchemaDef(this.schemaDef)
@@ -153,11 +176,11 @@ class Schema {
       }
     } 
     else {
-      fields.forEach(field => {
+      for (const field of normalizeSelectedFields(fields)) {
         if (cloned[field]?.type) {
           cloned[field] = { ...cloned[field], required: false }
         }
-      })
+      }
     }
     
     return new Schema(cloned, this.options)
@@ -167,12 +190,14 @@ class Schema {
    * Make all or specific fields required
    * Returns a new Schema without mutating the original
    * 
-   * @param {string[]} [fields] - Field names to make required. If omitted, all fields become required
+   * @param {string[]|string|Record<string, unknown>} [fields] - Field names to make required. If omitted, all fields become required
    * @returns {Schema} New schema with required fields
    * 
    * @example
    * schema.require() // all fields required
    * schema.require(['name']) // only name required
+   * schema.require('name')
+   * schema.require({ name: 1, age: true })
    */
   require(fields) {
     const cloned = cloneSchemaDef(this.schemaDef)
@@ -185,11 +210,11 @@ class Schema {
       }
     } 
     else {
-      fields.forEach(field => {
+      for (const field of normalizeSelectedFields(fields)) {
         if (cloned[field]?.type) {
           cloned[field] = { ...cloned[field], required: true }
         }
-      })
+      }
     }
     
     return new Schema(cloned, this.options)
@@ -199,23 +224,26 @@ class Schema {
    * Select only specific fields from schema
    * Returns a new Schema without mutating the original
    * 
-   * @param {string[]|true} fields - Field names to keep, or `true` to keep all fields (cloned schema)
+   * @param {string[]|string|Record<string, unknown>|true} fields - Field names to keep, object map with truthy values, or `true` to keep all fields (cloned schema)
    * @returns {Schema} New schema with only selected fields
    * 
    * @example
    * schema.pick(['name', 'email'])
+   * schema.pick('name')
+   * schema.pick({ name: 1, age: true })
    * schema.pick(true) // same keys as original, new Schema instance
    */
   pick(fields) {
     if (fields === true) {
       return new Schema(cloneSchemaDef(this.schemaDef), this.options)
     }
+    const keys = normalizeSelectedFields(fields)
     const picked = {}
-    fields.forEach(field => {
+    for (const field of keys) {
       if (field in this.schemaDef) {
         picked[field] = cloneSchemaDef(this.schemaDef[field])
       }
-    })
+    }
     return new Schema(picked, this.options)
   }
 
@@ -223,15 +251,19 @@ class Schema {
    * Remove specific fields from schema
    * Returns a new Schema without mutating the original
    * 
-   * @param {string[]} fields - Field names to remove
+   * @param {string[]|string|Record<string, unknown>} fields - Field names to remove
    * @returns {Schema} New schema without selected fields
    * 
    * @example
    * schema.omit(['password', 'createdAt'])
+   * schema.omit('password')
+   * schema.omit({ password: 1, email: true })
    */
   omit(fields) {
     const cloned = cloneSchemaDef(this.schemaDef)
-    fields.forEach(field => delete cloned[field])
+    for (const field of normalizeSelectedFields(fields)) {
+      delete cloned[field]
+    }
     return new Schema(cloned, this.options)
   }
 
